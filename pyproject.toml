@@ -1,0 +1,49 @@
+[project]
+name = "open-skills"
+version = "0.1.0"
+description = "AI agent skills for developer workflows — git discipline, PR automation, and skill management."
+readme = "README.md"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+authors = [
+    { name = "Open Skills", email = "dev@openskills.dev" }
+]
+keywords = ["ai", "agent", "skills", "claude", "cursor", "opencode"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+]
+
+dependencies = [
+    "click>=8.1.0",
+    "ruamel.yaml>=0.18.0",
+    "questionary>=2.0.0",
+    "fuzzywuzzy>=0.18.0",
+    "python-dotenv>=1.0.0",
+    "httpx>=0.27.0",
+    "jinja2>=3.1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.1.0",
+    "ruff>=0.4.0",
+]
+
+[project.scripts]
+open-skills = "open_skills.cli:main"
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.ruff]
+target-version = "py312"
+line-length = 88
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
