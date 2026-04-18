@@ -24,7 +24,11 @@ def install_git_hook(project_dir: Path, hook_name: str = 'post-commit') -> Path:
 
 
 def _is_skillet_hook_content(text: str) -> bool:
-    return 'Skillet' in text or '# Open Skills - Post-commit' in text
+    return (
+        "Skillet" in text
+        or "# Skillet - Post-commit hook" in text
+        or "# Open Skills - Post-commit" in text
+    )
 
 
 def is_hook_installed(project_dir: Path, hook_name: str = 'post-commit') -> bool:

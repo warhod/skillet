@@ -5,9 +5,7 @@ description = "Prepare and serve agent skills into your repo — git discipline,
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
-authors = [
-    { name = "Skillet", email = "dev@openskills.dev" }
-]
+authors = [{ name = "Skillet" }]
 keywords = ["ai", "agent", "skills", "claude", "cursor", "opencode"]
 classifiers = [
     "Development Status :: 3 - Alpha",

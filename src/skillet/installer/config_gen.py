@@ -24,9 +24,12 @@ def _remove_legacy_ide_files(project_dir: Path) -> None:
     copilot = project_dir / ".github" / "copilot-instructions.md"
     if copilot.is_file():
         copilot.unlink()
-    old_cursor_rules = project_dir / ".cursor" / "rules" / "openskills.mdc"
-    if old_cursor_rules.is_file():
-        old_cursor_rules.unlink()
+    for legacy_rules in (
+        project_dir / ".cursor" / "rules" / "openskills.mdc",
+        project_dir / ".cursor" / "rules" / "open-skills.mdc",
+    ):
+        if legacy_rules.is_file():
+            legacy_rules.unlink()
 
 
 def emit_claude_code_skills(skills_dir: Path, project_dir: Path) -> None:

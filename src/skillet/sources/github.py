@@ -14,6 +14,8 @@ from urllib.parse import quote
 
 import httpx
 
+from skillet import __version__
+
 _OWNER_REPO_PART = re.compile(r"^[^/\s@]+$")
 
 
@@ -80,7 +82,7 @@ def _tarball_url_candidates(owner: str, repo: str, ref: str) -> list[str]:
 def _request_headers(token: str | None) -> dict[str, str]:
     headers: dict[str, str] = {
         "Accept": "application/octet-stream",
-        "User-Agent": "skillet/0.1 (+https://github.com/open-skills/open-skills)",
+        "User-Agent": f"skillet/{__version__}",
     }
     if token:
         headers["Authorization"] = f"Bearer {token}"

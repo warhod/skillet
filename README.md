@@ -22,7 +22,7 @@ skillet list
 # Search for a skill
 skillet search "git"
 
-# Configure API keys and registry
+# Configure API keys (optional GitHub token for private sources / rate limits)
 skillet config
 
 # Re-sync IDE configs
@@ -38,9 +38,9 @@ uv run skillet install
 ## Features
 
 - **Skills System**: Reusable markdown instructions for AI coding assistants
-- **Multi-IDE Support**: Generates config for OpenCode, Cursor, and GitHub Copilot
-- **Skill Registry**: Fetch additional skills from a remote registry
-- **Interactive Config**: Guided setup for API keys and settings
+- **Multi-IDE Support**: Emits native-style files for Claude Code, Cursor, OpenCode, and Gemini
+- **Sources**: Record skills from local paths or URLs in `.skillet/sources.json` (GitHub specs planned)
+- **Interactive Config**: Guided setup for API keys and optional `GITHUB_TOKEN`
 
 ## Bundled Skills
 
@@ -53,10 +53,9 @@ uv run skillet install
 ## Configuration
 
 Run `skillet config` to set up:
-- Registry URL
 - OpenRouter API key
 - Anthropic API key
-- GitHub token
+- GitHub token (optional; helps with private repos and API rate limits)
 
 ## License
 
