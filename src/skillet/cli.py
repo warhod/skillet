@@ -4,7 +4,7 @@ from skillet import __version__
 from skillet.skills.parser import get_skills_from_directory
 from skillet.skills.search import search_skills
 from skillet.installer.copier import copy_all_skills, remove_skill
-from skillet.installer.config_gen import write_config_files
+from skillet.installer.emitters import write_config_files
 from skillet.installer.hooks import install_git_hook, is_hook_installed
 from skillet.config.wizard import run_config_wizard, load_config
 from skillet.sources import (
