@@ -3,7 +3,7 @@ name: sprint
 description: Translates ticket IDs into git branches, PR titles, and description templates automatically.
 license: MIT
 metadata:
-  author: open-skills
+  author: skillet
   version: "1.0"
 permissions:
   allow:

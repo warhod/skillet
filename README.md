@@ -1,14 +1,10 @@
-# Open Skills
+# Skillet
 
-AI agent skills for developer workflows — git discipline, PR automation, and skill management.
+Prepare and serve agent skills into your repo — for any workflow and any project.
 
 ## Installation
 
-```bash
-uv pip install open-skills
-```
-
-Or install locally for development:
+Skillet is not published on PyPI yet; install from a clone (a future PyPI release may use a name such as `agent-skillet`).
 
 ```bash
 uv pip install -e .
@@ -18,25 +14,25 @@ uv pip install -e .
 
 ```bash
 # Install skills into current project
-open-skills install
+skillet install
 
 # List installed skills
-open-skills list
+skillet list
 
 # Search for a skill
-open-skills search "git"
+skillet search "git"
 
 # Configure API keys and registry
-open-skills config
+skillet config
 
 # Re-sync IDE configs
-open-skills sync
+skillet sync
 ```
 
 Alternatively, run with `uv run`:
 
 ```bash
-uv run open-skills install
+uv run skillet install
 ```
 
 ## Features
@@ -56,7 +52,7 @@ uv run open-skills install
 
 ## Configuration
 
-Run `open-skills config` to set up:
+Run `skillet config` to set up:
 - Registry URL
 - OpenRouter API key
 - Anthropic API key

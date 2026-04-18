@@ -3,7 +3,7 @@ name: git-os
 description: Enforces conventional commits, atomic changes, and GIT-OS workflow. Every agent that generates a commit must read this skill first.
 license: MIT
 metadata:
-  author: open-skills
+  author: skillet
   version: "1.0"
 permissions:
   allow:

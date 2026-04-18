@@ -1,12 +1,12 @@
 [project]
-name = "open-skills"
+name = "skillet"
 version = "0.1.0"
-description = "AI agent skills for developer workflows — git discipline, PR automation, and skill management."
+description = "Prepare and serve agent skills into your repo — git discipline, PR automation, and skill management."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [
-    { name = "Open Skills", email = "dev@openskills.dev" }
+    { name = "Skillet", email = "dev@openskills.dev" }
 ]
 keywords = ["ai", "agent", "skills", "claude", "cursor", "opencode"]
 classifiers = [
@@ -35,7 +35,7 @@ dev = [
 ]
 
 [project.scripts]
-open-skills = "open_skills.cli:main"
+skillet = "skillet.cli:main"
 
 [build-system]
 requires = ["setuptools>=61.0"]

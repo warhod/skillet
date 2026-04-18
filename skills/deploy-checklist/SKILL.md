@@ -3,7 +3,7 @@ name: deploy-checklist
 description: Pre-deploy and post-deploy checklist skill. Ensures env vars, migrations, CI, rollback plan, smoke tests, and monitoring are verified before and after every deployment.
 license: MIT
 metadata:
-  author: open-skills
+  author: skillet
   version: "1.0"
 permissions:
   allow:

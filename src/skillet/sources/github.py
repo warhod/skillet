@@ -1,0 +1,210 @@
+"""GitHub tarball fetch + skills.sh-style source specs (owner/repo, paths, @ref)."""
+
+from __future__ import annotations
+
+import io
+import re
+import shutil
+import tarfile
+import tempfile
+from collections.abc import Callable
+from dataclasses import dataclass
+from pathlib import Path
+from urllib.parse import quote
+
+import httpx
+
+_OWNER_REPO_PART = re.compile(r"^[^/\s@]+$")
+
+
+@dataclass(frozen=True)
+class GitHubSourceSpec:
+    owner: str
+    repo: str
+    ref: str | None
+    """None means default branch (try main, then master)."""
+    skill_subpath: str | None
+    """Directory path inside the repo root for a single skill, or None for all skills."""
+
+
+def parse_github_source_spec(spec: str) -> GitHubSourceSpec:
+    """Parse a GitHub source string. Caller should ensure this is not a local path spec."""
+    s = spec.strip()
+    if not s or "/" not in s:
+        msg = f"Invalid GitHub source spec (expected owner/repo): {spec!r}"
+        raise ValueError(msg)
+
+    if "@" in s:
+        left, ref = s.rsplit("@", 1)
+        ref = ref.strip()
+        if not ref:
+            msg = f"Invalid ref in source spec: {spec!r}"
+            raise ValueError(msg)
+    else:
+        left, ref = s, None
+
+    parts = [p for p in left.strip().split("/") if p]
+    if len(parts) < 2:
+        msg = f"Invalid GitHub source spec (expected owner/repo): {spec!r}"
+        raise ValueError(msg)
+
+    owner, repo = parts[0], parts[1]
+    for label, value in (("owner", owner), ("repo", repo)):
+        if not _OWNER_REPO_PART.match(value):
+            msg = f"Invalid GitHub {label} in source spec: {spec!r}"
+            raise ValueError(msg)
+
+    skill_subpath = "/".join(parts[2:]) if len(parts) > 2 else None
+    if skill_subpath == "":
+        skill_subpath = None
+
+    return GitHubSourceSpec(
+        owner=owner,
+        repo=repo,
+        ref=ref,
+        skill_subpath=skill_subpath,
+    )
+
+
+def _tarball_url_candidates(owner: str, repo: str, ref: str) -> list[str]:
+    o = quote(owner, safe="")
+    r = quote(repo, safe="")
+    rq = quote(ref, safe="")
+    return [
+        f"https://codeload.github.com/{o}/{r}/tar.gz/{rq}",
+        f"https://codeload.github.com/{o}/{r}/tar.gz/refs/heads/{rq}",
+        f"https://codeload.github.com/{o}/{r}/tar.gz/refs/tags/{rq}",
+    ]
+
+
+def _request_headers(token: str | None) -> dict[str, str]:
+    headers: dict[str, str] = {
+        "Accept": "application/octet-stream",
+        "User-Agent": "skillet/0.1 (+https://github.com/open-skills/open-skills)",
+    }
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    return headers
+
+
+def _download_first_available(
+    owner: str,
+    repo: str,
+    ref: str,
+    *,
+    token: str | None,
+    client: httpx.Client,
+) -> bytes:
+    last: httpx.HTTPStatusError | None = None
+    headers = _request_headers(token)
+    for url in _tarball_url_candidates(owner, repo, ref):
+        r = client.get(url, headers=headers)
+        try:
+            r.raise_for_status()
+            return r.content
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404:
+                last = e
+                continue
+            raise
+    if last is not None:
+        raise last
+    msg = f"No tarball matched for {owner}/{repo}@{ref}"
+    raise RuntimeError(msg)
+
+
+def discover_skill_directories(repo_root: Path) -> list[Path]:
+    """Return every directory under repo_root that directly contains SKILL.md."""
+    found: list[Path] = []
+    for skill_md in repo_root.rglob("SKILL.md"):
+        if any(p.startswith(".") for p in skill_md.parts):
+            continue
+        found.append(skill_md.parent)
+    return sorted(found, key=lambda p: str(p.relative_to(repo_root)))
+
+
+def _select_skill_directories(
+    repo_root: Path,
+    skill_subpath: str | None,
+) -> list[Path]:
+    if skill_subpath is None:
+        dirs = discover_skill_directories(repo_root)
+        if not dirs:
+            msg = f"No SKILL.md found under extracted repo root {repo_root}"
+            raise ValueError(msg)
+        return dirs
+    target = (repo_root / skill_subpath).resolve()
+    try:
+        target.relative_to(repo_root.resolve())
+    except ValueError as e:
+        msg = f"Skill path {skill_subpath!r} escapes repository root"
+        raise ValueError(msg) from e
+    skill_file = target / "SKILL.md"
+    if not skill_file.is_file():
+        msg = f"No SKILL.md at expected path {skill_file}"
+        raise ValueError(msg)
+    return [target]
+
+
+def _extract_strip_topdir(archive: bytes, dest: Path) -> Path:
+    dest.mkdir(parents=True, exist_ok=True)
+    with tarfile.open(fileobj=io.BytesIO(archive), mode="r:gz") as tf:
+        tf.extractall(dest, filter="data")
+    entries = list(dest.iterdir())
+    if len(entries) == 1 and entries[0].is_dir():
+        return entries[0]
+    return dest
+
+
+def fetch_github_skill_directories(
+    source: GitHubSourceSpec,
+    *,
+    token: str | None = None,
+    client: httpx.Client | None = None,
+) -> tuple[list[Path], Callable[[], None]]:
+    """
+    Download and extract the repo tarball, returning absolute skill directory paths.
+
+    The returned cleanup callback removes the temporary extraction directory.
+    """
+    own_client = client is None
+    http = client or httpx.Client(timeout=60.0, follow_redirects=True)
+    try:
+        refs_order = [source.ref] if source.ref is not None else ["main", "master"]
+        archive: bytes | None = None
+        last: Exception | None = None
+        for ref in refs_order:
+            if ref is None:
+                continue
+            try:
+                archive = _download_first_available(
+                    source.owner, source.repo, ref, token=token, client=http
+                )
+                break
+            except httpx.HTTPStatusError as e:
+                if e.response.status_code == 404 and source.ref is None:
+                    last = e
+                    continue
+                raise
+        if archive is None:
+            msg = (
+                f"Could not download {source.owner}/{source.repo}"
+                + (f"@{source.ref}" if source.ref else " (tried main, master)")
+            )
+            raise RuntimeError(msg) from last
+    finally:
+        if own_client:
+            http.close()
+
+    tmp = tempfile.mkdtemp(prefix="skillet-gh-")
+
+    def cleanup() -> None:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+    try:
+        repo_root = _extract_strip_topdir(archive, Path(tmp))
+        dirs = _select_skill_directories(repo_root, source.skill_subpath)
+        return dirs, cleanup
+    except Exception:
+        cleanup()
+        raise

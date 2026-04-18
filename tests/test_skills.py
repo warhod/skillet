@@ -1,6 +1,6 @@
 import pytest
 from pathlib import Path
-from open_skills.skills.parser import parse_frontmatter, get_skills_from_directory
+from skillet.skills.parser import parse_frontmatter, get_skills_from_directory
 
 
 def test_parse_frontmatter():
@@ -26,7 +26,7 @@ def test_parse_frontmatter_empty():
 
 
 def test_get_skills_from_directory():
-    from open_skills.cli import get_bundled_skills_dir
+    from skillet.cli import get_bundled_skills_dir
     bundled = get_bundled_skills_dir()
     skills = get_skills_from_directory(bundled)
     assert len(skills) >= 3

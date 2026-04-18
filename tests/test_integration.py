@@ -1,12 +1,12 @@
 import pytest
 from pathlib import Path
-from open_skills.skills.parser import parse_skill_file
-from open_skills.skills.search import search_skills
-from open_skills.installer.copier import copy_all_skills, remove_skill
+from skillet.skills.parser import parse_skill_file
+from skillet.skills.search import search_skills
+from skillet.installer.copier import copy_all_skills, remove_skill
 
 
 def test_parse_skill_file():
-    from open_skills.cli import get_bundled_skills_dir
+    from skillet.cli import get_bundled_skills_dir
     bundled = get_bundled_skills_dir()
     git_os_skill = bundled / 'git-os' / 'SKILL.md'
     skill = parse_skill_file(git_os_skill)
@@ -40,7 +40,7 @@ def test_search_skills_exact_match():
 
 
 def test_copy_and_remove_skill(tmp_path):
-    from open_skills.cli import get_bundled_skills_dir
+    from skillet.cli import get_bundled_skills_dir
     
     # Copy skills
     dest = tmp_path / 'skills'
