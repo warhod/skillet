@@ -1,7 +1,7 @@
 [project]
 name = "skillet"
 version = "0.1.0"
-description = "Prepare and serve agent skills into your repo — git discipline, PR automation, and skill management."
+description = "AI agent skills for developer workflows — git discipline, PR automation, and skill management."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
