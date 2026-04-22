@@ -1,14 +1,22 @@
+# Python runtime/cache
 .venv/
 __pycache__/
 *.pyc
 *.pyo
 .pytest_cache/
 .coverage
+
+# Python packaging/build artifacts
 *.egg-info/
 dist/
 build/
 .eggs/
 *.egg
-.DS_Store
+
+# Editor/IDE metadata
 .idea/
 .vscode/
+.cursor/
+
+# OS files
+.DS_Store
