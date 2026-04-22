@@ -1,4 +1,18 @@
-"""Per-project ``.skillet/config`` and resolved IDE flags for emitters."""
+"""Per-project ``.skillet/config`` and resolved IDE flags for emitters.
+
+Each ``ide_support`` entry selects whether Skillet mirrors skills into that agent's
+native skills directory (project-relative):
+
+- ``claude`` → ``.claude/skills/<skill>/SKILL.md``
+- ``cursor`` → ``.cursor/skills/<skill>/SKILL.md``
+- ``gemini`` → ``.agents/skills/<skill>/SKILL.md`` 
+- ``antigravity`` → ``.agents/skills/<skill>/SKILL.md``
+- ``opencode`` → ``.agents/skills/<skill>/SKILL.md``
+
+Toggling a target affects only that target's emitted files (see
+``skillet.config.settings.IDE_NATIVE_SKILL_REL_PATH``). Disabling both ``gemini`` and
+``opencode`` removes the shared ``.agents/skills/`` tree.
+"""
 
 from __future__ import annotations
 
@@ -39,7 +53,13 @@ def save_project_config(project_dir: Path, config: dict) -> None:
 
 
 def ide_emit_flags_from_global() -> dict[str, bool]:
-    """Emitter on/off map from global ``ide_support`` (fallback when project unset)."""
+    """On/off map per IDE key from global ``ide_support`` (fallback when project unset).
+
+    Keys are ``claude``, ``cursor``, ``gemini``, ``opencode``. A ``True`` value means
+    that target is enabled; native skill paths are defined in
+    ``settings.IDE_NATIVE_SKILL_REL_PATH`` (``gemini`` and ``opencode`` share
+    ``.agents/skills/``).
+    """
     config = load_config()
     default_ides = list(IDE_KEYS)
     keys = list(IDE_KEYS)
@@ -54,7 +74,10 @@ def ide_emit_flags_from_global() -> dict[str, bool]:
 
 
 def ide_emit_flags_for_project(project_dir: Path) -> dict[str, bool]:
-    """Emitter on/off map: project ``ide_support`` overrides global defaults."""
+    """On/off map: project ``ide_support`` overrides global when non-empty.
+
+    See `ide_emit_flags_from_global` for key semantics and native path mapping.
+    """
     data = load_project_config(project_dir)
     raw = data.get("ide_support")
     keys = list(IDE_KEYS)

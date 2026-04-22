@@ -7,8 +7,10 @@ import questionary
 from skillet.config.settings import (
     IDE_KEYS,
     IDE_LABELS,
+    format_ide_target_mapping_summary,
     get_config_path,
     ide_checkbox_instruction,
+    ide_multiselect_choice_label,
     ide_multiselect_prompt_global,
     ide_reference_hint_line,
     load_config,
@@ -29,7 +31,8 @@ def prompt_ide_targets(
             full_message = f"{full_message}\n{hint}"
 
     choices = [
-        {"name": IDE_LABELS[k], "value": k, "checked": False} for k in IDE_KEYS
+        {"name": ide_multiselect_choice_label(k), "value": k, "checked": False}
+        for k in IDE_KEYS
     ]
 
     def _need_at_least_one(selected: list[str]) -> bool | str:
@@ -88,6 +91,14 @@ def run_config_wizard() -> None:
 
 def _print_config_wizard_footer(config: dict) -> None:
     print("\n✓ Configuration saved to ~/.config/skillet/config.json")
+
+    ide = config.get("ide_support")
+    if isinstance(ide, list) and ide:
+        summary = format_ide_target_mapping_summary(
+            [k for k in ide if k in IDE_LABELS]
+        )
+        if summary:
+            print(f"\n{summary}")
 
     print(
         "\nSkillet reads `GITHUB_TOKEN` from the environment or this file when "
