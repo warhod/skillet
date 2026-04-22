@@ -1,0 +1,10 @@
+{
+  "skill-creator": {
+    "kind": "github",
+    "spec": "anthropics/skills/skill-creator"
+  },
+  "soultrace": {
+    "kind": "github",
+    "spec": "soultrace-ai/soultrace-skill/soultrace"
+  }
+}
