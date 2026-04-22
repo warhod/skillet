@@ -25,7 +25,6 @@ def test_write_config_files_all_targets(tmp_path: Path) -> None:
     cfg = {
         "claude": True,
         "cursor": True,
-        "opencode": True,
         "gemini": True,
     }
     written = write_config_files(skills_dir, tmp_path, cfg)
@@ -48,6 +47,7 @@ def test_write_config_files_all_targets(tmp_path: Path) -> None:
 
     assert "CLAUDE.md" in written
     assert ".cursor/rules/skillet.mdc" in written
+    assert "AGENTS.md" in written
 
 
 def test_removes_legacy_cursorrules_and_copilot(tmp_path: Path) -> None:
@@ -64,7 +64,7 @@ def test_removes_legacy_cursorrules_and_copilot(tmp_path: Path) -> None:
     write_config_files(
         skills_dir,
         tmp_path,
-        {"claude": False, "cursor": True, "opencode": False, "gemini": False},
+        {"claude": False, "cursor": True, "gemini": False},
     )
 
     assert not legacy.exists()
@@ -78,14 +78,14 @@ def test_prunes_outputs_when_ide_disabled(tmp_path: Path) -> None:
     write_config_files(
         skills_dir,
         tmp_path,
-        {"claude": True, "cursor": True, "opencode": True, "gemini": True},
+        {"claude": True, "cursor": True, "gemini": True},
     )
     assert (tmp_path / "AGENTS.md").is_file()
 
     write_config_files(
         skills_dir,
         tmp_path,
-        {"claude": False, "cursor": False, "opencode": False, "gemini": False},
+        {"claude": False, "cursor": False, "gemini": False},
     )
 
     assert not (tmp_path / "CLAUDE.md").exists()
