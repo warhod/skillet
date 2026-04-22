@@ -50,8 +50,6 @@ On `skillet install`, `skillet sync`, and `skillet add`, Skillet **mirrors** eac
 
 The `gemini` key in `ide_support` is reserved for future use; in the current version Skillet does **not** write files for it. Use `opencode` if you need `.agents/skills/`.
 
-Skillet does **not** generate `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, or a Skillet-specific Cursor rules file. When you run `install` / `sync` / `add`, Skillet deletes a short list of **deprecated files it used to emit** (such as `CLAUDE.md`, `GEMINI.md`, and `.cursor/rules/skillet.mdc`, plus a few other legacy paths), if they are still on disk. Remove or keep `AGENTS.md` yourself if your project uses that convention outside Skillet.
-
 ## Agent Skills specification
 
 For broader compatibility across tools, see [agentskills.io](https://agentskills.io).

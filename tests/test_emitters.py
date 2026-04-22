@@ -1,7 +1,7 @@
 import shutil
 from pathlib import Path
 
-from skillet.installer.emitters import write_config_files
+from skillet.installer.emitters import emit_native_skills, write_config_files
 
 
 def _write_skill(skills_dir: Path, name: str, description: str) -> None:
@@ -120,15 +120,74 @@ def test_write_config_files_removes_legacy_skillet_paths(tmp_path: Path) -> None
     """``write_config_files`` still deletes paths listed in emitters legacy cleanup."""
     skills_dir = tmp_path / ".skillet" / "skills"
     _write_skill(skills_dir, "s", "d")
-    (tmp_path / "CLAUDE.md").write_text("old", encoding="utf-8")
-    (tmp_path / "GEMINI.md").write_text("old", encoding="utf-8")
     rules = tmp_path / ".cursor" / "rules"
     rules.mkdir(parents=True)
     (rules / "skillet.mdc").write_text("old", encoding="utf-8")
+    gh = tmp_path / ".github"
+    gh.mkdir(parents=True)
+    (gh / "copilot-instructions.md").write_text("old", encoding="utf-8")
 
     write_config_files(skills_dir, tmp_path, {"claude": True, "cursor": False, "opencode": False})
 
-    assert not (tmp_path / "CLAUDE.md").exists()
-    assert not (tmp_path / "GEMINI.md").exists()
     assert not (rules / "skillet.mdc").exists()
+    assert not gh.exists()
     assert (tmp_path / ".claude" / "skills" / "s" / "SKILL.md").is_file()
+
+
+def test_emit_native_skills_prunes_stale_mirror_dirs(tmp_path: Path) -> None:
+    skills_dir = tmp_path / ".skillet" / "skills"
+    _write_skill(skills_dir, "keep", "k")
+    dest = tmp_path / "mirror"
+    dest.mkdir(parents=True)
+    stale = dest / "removed"
+    stale.mkdir(parents=True)
+    (stale / "SKILL.md").write_text("stale", encoding="utf-8")
+
+    emit_native_skills(skills_dir, dest)
+
+    assert not stale.exists()
+    assert (dest / "keep" / "SKILL.md").is_file()
+    assert (dest / "keep" / "SKILL.md").read_text(encoding="utf-8") == (
+        skills_dir / "keep" / "SKILL.md"
+    ).read_text(encoding="utf-8")
+
+
+def test_emit_native_skills_overwrites_when_source_changes(tmp_path: Path) -> None:
+    skills_dir = tmp_path / ".skillet" / "skills"
+    _write_skill(skills_dir, "mut", "first")
+    dest = tmp_path / "out"
+    emit_native_skills(skills_dir, dest)
+    first = (dest / "mut" / "SKILL.md").read_text(encoding="utf-8")
+    assert "first" in first
+
+    (skills_dir / "mut" / "SKILL.md").write_text(
+        "---\nname: mut\ndescription: second\n---\n\n# updated\n",
+        encoding="utf-8",
+    )
+    emit_native_skills(skills_dir, dest)
+    assert "second" in (dest / "mut" / "SKILL.md").read_text(encoding="utf-8")
+    assert "updated" in (dest / "mut" / "SKILL.md").read_text(encoding="utf-8")
+    assert (dest / "mut" / "SKILL.md").read_text(encoding="utf-8") != first
+
+
+def test_prune_single_target_leaves_other_native_trees(tmp_path: Path) -> None:
+    """Disabling only Cursor removes ``.cursor/skills`` but keeps Claude/OpenCode mirrors."""
+    skills_dir = tmp_path / ".skillet" / "skills"
+    _write_skill(skills_dir, "one", "o")
+
+    write_config_files(
+        skills_dir,
+        tmp_path,
+        {"claude": True, "cursor": True, "opencode": True},
+    )
+    assert (tmp_path / ".cursor" / "skills" / "one" / "SKILL.md").is_file()
+
+    write_config_files(
+        skills_dir,
+        tmp_path,
+        {"claude": True, "cursor": False, "opencode": True},
+    )
+
+    assert not (tmp_path / ".cursor" / "skills").exists()
+    assert (tmp_path / ".claude" / "skills" / "one" / "SKILL.md").is_file()
+    assert (tmp_path / ".agents" / "skills" / "one" / "SKILL.md").is_file()

@@ -1,8 +1,9 @@
-import pytest
 from pathlib import Path
+
+from skillet.installer.copier import copy_all_skills, remove_skill
+from skillet.installer.emitters import write_config_files
 from skillet.skills.parser import parse_skill_file
 from skillet.skills.search import search_skills
-from skillet.installer.copier import copy_all_skills, remove_skill
 
 
 def test_parse_skill_file():
@@ -56,3 +57,27 @@ def test_copy_and_remove_skill(tmp_path):
     # Remove non-existent returns False
     removed = remove_skill(dest, 'nonexistent')
     assert removed is False
+
+
+def test_copy_emit_remove_prunes_all_native_mirrors(tmp_path: Path) -> None:
+    """Bundled skills copied to the store, mirrored natively, then removed everywhere."""
+    from skillet.cli import get_bundled_skills_dir
+
+    project_skills = tmp_path / ".skillet" / "skills"
+    count = copy_all_skills(get_bundled_skills_dir(), project_skills)
+    assert count >= 1
+
+    flags = {"claude": True, "cursor": True, "opencode": True}
+    write_config_files(project_skills, tmp_path, flags)
+
+    assert (tmp_path / ".claude/skills/git-os/SKILL.md").is_file()
+    assert (tmp_path / ".cursor/skills/git-os/SKILL.md").is_file()
+    assert (tmp_path / ".agents/skills/git-os/SKILL.md").is_file()
+
+    assert remove_skill(project_skills, "git-os") is True
+    write_config_files(project_skills, tmp_path, flags)
+
+    for base in (".claude/skills", ".cursor/skills", ".agents/skills"):
+        assert not (tmp_path / base / "git-os").exists()
+
+    assert not (tmp_path / ".cursor/rules/skillet.mdc").exists()

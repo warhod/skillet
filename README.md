@@ -42,7 +42,7 @@ uv run skillet install
 ## Features
 
 - **Skills**: [skills.sh](https://skills.sh/)-style GitHub specs (`owner/repo`, `owner/repo/path@ref`) plus local directories; tracked in `.skillet/sources.json`.
-- **Native skill directories**: for each **enabled** IDE target, Skillet copies each installed skill to that tool’s standard skills path — see [Where skills are discovered](#where-skills-are-discovered) below. Skillet does **not** generate `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, or a Skillet Cursor rules file. On `install` / `sync` / `add`, it deletes **known** legacy outputs from older Skillet versions if they still exist (for example `CLAUDE.md`, `GEMINI.md`, and `.cursor/rules/skillet.mdc`).
+- **Native skill directories**: for each **enabled** IDE target, Skillet copies each installed skill to that tool’s standard skills path — see [Where skills are discovered](#where-skills-are-discovered) below. Skillet does **not** generate `AGENTS.md`, `CLAUDE.md`, `GEMINI.md`, or a Skillet Cursor rules file. On `install` / `sync` / `add`, it deletes **known** legacy Skillet outputs if they still exist (for example `.cursor/rules/skillet.mdc` and `.github/copilot-instructions.md`).
 - **Docs**: [Authoring skills](docs/AUTHORING.md).
 
 ## Bundled Skills
