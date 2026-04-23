@@ -1,4 +1,4 @@
-"""Re-materialize skills under `.skillet/skills/` from `sources.json` specs."""
+"""Re-materialize skills under `.skillet/skills/` from `.skillet/config/sources.json` specs."""
 
 from __future__ import annotations
 
@@ -53,8 +53,11 @@ def _apply_one(
     kind = spec.get("kind")
     if kind == "local":
         rel = str(spec.get("path", "")).strip()
+        local_source = str(spec.get("source", "")).strip()
+        if not rel and local_source:
+            rel = (Path("skills") / local_source).as_posix()
         if not rel:
-            return "local spec missing path"
+            return "local spec missing path/source"
         src = (project_dir / rel).resolve()
         if not src.exists():
             return f"local path does not exist: {rel}"
@@ -111,7 +114,7 @@ def apply_all_sources(
     *,
     github_token: str | None = None,
 ) -> list[str]:
-    """Apply every entry in ``sources.json``. Returns human-readable errors (empty if all ok)."""
+    """Apply every entry in ``.skillet/config/sources.json``."""
     skills_dest.mkdir(parents=True, exist_ok=True)
     errors: list[str] = []
     for name, spec in load_sources(project_dir).items():

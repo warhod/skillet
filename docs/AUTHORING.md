@@ -38,21 +38,22 @@ description: When editing payment code, follow these invariants.
 
 - **Upstream** skills use GitHub specs compatible with [skills.sh](https://skills.sh/), e.g. `anthropics/skills/skill-creator` or `owner/repo/path/to/skill-dir@branch`.
 
-## Install source selection (`skill_sources`)
+## Install source selection (`.skillet/config/sources.json`)
 
-`skillet install` reads `.skillet/config/config.json` and installs from `skill_sources`.
+`skillet install` and `skillet sync` read `.skillet/config/sources.json` as the single source of truth.
 
-- `@bundled` installs all skills under repo `skills/`
-- local entries must point to a **skill directory** (contains `SKILL.md`), not the `SKILL.md` file itself
-- GitHub specs use the same format as `skillet add`
+- `kind: "local"` with `"source": "<name>"` resolves to `./skills/<name>/`
+- `kind: "local"` with `"path": "<dir>"` resolves directly to that directory
+- `kind: "github"` uses the same spec format as `skillet add`
 
-Example: install only local `git-os` (exclude other bundled skills):
+Example: install only local `git-os` (exclude other repo skills):
 
 ```json
 {
-  "version": "1",
-  "ide_support": ["cursor", "claude"],
-  "skill_sources": ["./skills/git-os"]
+  "git-os": {
+    "kind": "local",
+    "source": "git-os"
+  }
 }
 ```
 

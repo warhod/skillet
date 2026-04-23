@@ -7,6 +7,17 @@ from click.testing import CliRunner
 
 from skillet.cli import main
 from skillet.config.project import PROJECT_CONFIG_VERSION, save_project_config
+from skillet.sources.store import load_sources, save_sources
+
+
+def _write_local_repo_skills(project_dir: Path) -> None:
+    for name in ("git-os", "sprint", "deploy-checklist"):
+        d = project_dir / "skills" / name
+        d.mkdir(parents=True, exist_ok=True)
+        (d / "SKILL.md").write_text(
+            f"---\nname: {name}\ndescription: seeded\n---\n",
+            encoding="utf-8",
+        )
 
 
 def _ensure_all_native_targets(project_dir: Path) -> None:
@@ -21,6 +32,7 @@ def _ensure_all_native_targets(project_dir: Path) -> None:
 
 def test_install_writes_project_config_and_skills(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.chdir(tmp_path)
+    _write_local_repo_skills(tmp_path)
     runner = CliRunner()
     result = runner.invoke(main, ["install", str(tmp_path)])
     assert result.exit_code == 0, result.output
@@ -31,13 +43,16 @@ def test_install_writes_project_config_and_skills(tmp_path: Path, monkeypatch) -
     assert data.get("version") == "1"
     assert isinstance(data.get("ide_support"), list)
     assert data["ide_support"]
-    assert data.get("skill_sources") == ["@bundled"]
 
     skills_dir = tmp_path / ".skillet" / "skills"
     assert (skills_dir / "git-os" / "SKILL.md").is_file()
+    sources = load_sources(tmp_path)
+    assert sources["git-os"] == {"kind": "local", "source": "git-os"}
 
 
-def test_install_uses_configured_skill_sources(tmp_path: Path, monkeypatch) -> None:
+def test_install_uses_sources_json_as_single_source_of_truth(
+    tmp_path: Path, monkeypatch
+) -> None:
     monkeypatch.chdir(tmp_path)
     custom = tmp_path / "vendor" / "extra-skill"
     custom.mkdir(parents=True)
@@ -45,9 +60,9 @@ def test_install_uses_configured_skill_sources(tmp_path: Path, monkeypatch) -> N
         "---\nname: extra-skill\ndescription: extra\n---\n\n# Extra\n",
         encoding="utf-8",
     )
-    save_project_config(
+    save_sources(
         tmp_path,
-        {"version": "1", "ide_support": ["cursor"], "skill_sources": ["vendor/extra-skill"]},
+        {"extra-skill": {"kind": "local", "path": "vendor/extra-skill"}},
     )
 
     runner = CliRunner()
@@ -56,7 +71,6 @@ def test_install_uses_configured_skill_sources(tmp_path: Path, monkeypatch) -> N
 
     skills_dir = tmp_path / ".skillet" / "skills"
     assert (skills_dir / "extra-skill" / "SKILL.md").is_file()
-    assert not (skills_dir / "git-os" / "SKILL.md").exists()
 
 
 def test_install_removed_flags_raise_usage_error() -> None:
@@ -70,6 +84,7 @@ def test_install_mirrors_native_skill_directories(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.chdir(tmp_path)
+    _write_local_repo_skills(tmp_path)
     monkeypatch.setattr(
         "skillet.cli.ensure_project_ide_support",
         _ensure_all_native_targets,
@@ -86,10 +101,11 @@ def test_install_mirrors_native_skill_directories(
     assert not (tmp_path / "AGENTS.md").exists()
 
 
-def test_sync_prunes_native_mirrors_when_skill_removed_from_store(
+def test_sync_restores_native_mirrors_from_sources_json(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.chdir(tmp_path)
+    _write_local_repo_skills(tmp_path)
     monkeypatch.setattr(
         "skillet.cli.ensure_project_ide_support",
         _ensure_all_native_targets,
@@ -102,7 +118,7 @@ def test_sync_prunes_native_mirrors_when_skill_removed_from_store(
     assert r.exit_code == 0, r.output
 
     for base in (".claude/skills", ".cursor/skills", ".agents/skills"):
-        assert not (tmp_path / base / "git-os").exists()
+        assert (tmp_path / base / "git-os" / "SKILL.md").is_file()
         assert (tmp_path / base / "sprint" / "SKILL.md").is_file()
 
 
@@ -110,6 +126,7 @@ def test_remove_prunes_skill_from_all_native_trees(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.chdir(tmp_path)
+    _write_local_repo_skills(tmp_path)
     monkeypatch.setattr(
         "skillet.cli.ensure_project_ide_support",
         _ensure_all_native_targets,
@@ -128,6 +145,7 @@ def test_sync_strips_legacy_skillet_files(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.chdir(tmp_path)
+    _write_local_repo_skills(tmp_path)
     monkeypatch.setattr(
         "skillet.cli.ensure_project_ide_support",
         _ensure_all_native_targets,
@@ -148,6 +166,7 @@ def test_add_local_skill_mirrors_to_native_directories(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.chdir(tmp_path)
+    _write_local_repo_skills(tmp_path)
     runner = CliRunner()
     assert runner.invoke(main, ["install", "--skip-config", str(tmp_path)]).exit_code == 0
     _ensure_all_native_targets(tmp_path)

@@ -98,3 +98,17 @@ def test_apply_local_skill(tmp_path: Path) -> None:
     errors = apply_all_sources(tmp_path, skills_dest)
     assert errors == []
     assert (skills_dest / "my-skill" / "SKILL.md").is_file()
+
+
+def test_apply_local_skill_from_repo_skills_source_key(tmp_path: Path) -> None:
+    bundled = tmp_path / "skills" / "git-os"
+    bundled.mkdir(parents=True)
+    (bundled / "SKILL.md").write_text(
+        "---\nname: git-os\ndescription: bundled local\n---\n", encoding="utf-8"
+    )
+
+    skills_dest = tmp_path / ".skillet" / "skills"
+    upsert_source(tmp_path, "git-os", {"kind": "local", "source": "git-os"})
+    errors = apply_all_sources(tmp_path, skills_dest)
+    assert errors == []
+    assert (skills_dest / "git-os" / "SKILL.md").is_file()

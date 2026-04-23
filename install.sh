@@ -71,7 +71,7 @@ main() {
   uv sync --all-groups
 
   info "Running «skillet install» in: $(pwd)"
-  info "This copies bundled skills into .skillet/skills/, applies .skillet/sources.json, and regenerates IDE helper files for this directory."
+  info "This copies bundled skills into .skillet/skills/, applies .skillet/config/sources.json, and regenerates IDE helper files for this directory."
   uv run skillet install "$@"
 }
 
