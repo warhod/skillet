@@ -47,7 +47,12 @@ def _download_http_zip(url: str, dest_dir: Path) -> None:
         response = httpx.get(url, timeout=30, follow_redirects=True)
         response.raise_for_status()
         with zipfile.ZipFile(io.BytesIO(response.content)) as zf:
-            zf.extractall(dest_dir)
+            dest_dir_resolved = dest_dir.resolve()
+            for member in zf.infolist():
+                member_path = (dest_dir_resolved / member.filename).resolve()
+                if not member_path.is_relative_to(dest_dir_resolved):
+                    raise RuntimeError(f"Zip slip vulnerability detected: {member.filename}")
+                zf.extract(member, dest_dir)
     except Exception as e:
         raise RuntimeError(f"Failed to download zip: {e}") from e
 
