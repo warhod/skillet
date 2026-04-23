@@ -21,7 +21,7 @@ That script can bootstrap a pinned [uv](https://github.com/astral-sh/uv) install
 ## Quick Start
 
 ```bash
-# Install bundled defaults + apply sources; prompts once for IDE targets per project
+# Install from configured skill_sources (defaults to @bundled); prompts once for IDE targets
 skillet install
 
 skillet list
@@ -69,7 +69,21 @@ Project-level bootstrap sources for `skillet install` live in `.skillet/config/c
 }
 ```
 
-`skill_sources` controls where install-time skills come from. Use `@bundled` for repo `skills/`, or remove it if you only want remote/local specs.
+`skill_sources` controls where install-time skills come from.
+
+- `@bundled` means "install all skills under repo `skills/`"
+- local paths should point to a **skill directory** (contains `SKILL.md`), not the `SKILL.md` file
+- GitHub specs are supported (same format as `skillet add`)
+
+Example: install only local `git-os` (and not other bundled skills):
+
+```json
+{
+  "version": "1",
+  "ide_support": ["cursor", "claude"],
+  "skill_sources": ["./skills/git-os"]
+}
+```
 
 ## Practical examples
 
