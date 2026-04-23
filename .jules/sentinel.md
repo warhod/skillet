@@ -1,4 +1,0 @@
-## 2025-02-28 - [Critical] Zip Slip Vulnerability in HTTP Zip Extraction
-**Vulnerability:** Zip files fetched over HTTP via `_download_http_zip` were extracted using `zf.extractall(dest_dir)` without any path validation. This allows maliciously crafted zip files to perform directory traversal (Zip Slip) and write files outside the intended destination directory.
-**Learning:** Python's `zipfile` module does not fully protect against Zip Slip by default depending on paths and OS, unlike tarfile which now has `filter="data"`. Always explicitly validate that the resolved member path falls within the destination directory.
-**Prevention:** Iterate over `zf.infolist()`, construct the resolved destination path for each member (`(dest_dir.resolve() / member.filename).resolve()`), and verify it `is_relative_to` the destination root before extracting.
