@@ -42,7 +42,7 @@ def add_specs(
     github_token: str | None = None,
 ) -> tuple[int, list[str]]:
     """
-    For each spec, append entries to ``sources.json`` (same semantics as ``skillet add``).
+    For each spec, append entries to ``.skillet/config/sources.json`` (same semantics as ``skillet add``).
 
     Does **not** run ``apply_all_sources`` or native skill mirrors — call
     :func:`apply_sources_and_emit` afterward.

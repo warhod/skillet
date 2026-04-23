@@ -69,7 +69,7 @@ def parse_github_source_spec(spec: str) -> GitHubSourceSpec:
 
 
 def serialize_github_source_spec(source: GitHubSourceSpec) -> str:
-    """Serialize a parsed spec back to a ``skills.sh``-style string for ``sources.json``."""
+    """Serialize a parsed spec back to a ``skills.sh``-style string for source storage."""
     s = f"{source.owner}/{source.repo}"
     if source.skill_subpath:
         s += f"/{source.skill_subpath}"

@@ -15,20 +15,24 @@ from skillet.config.project import (
 )
 from skillet.config.settings import load_config
 from skillet.config.wizard import run_config_wizard
-from skillet.installer.copier import copy_all_skills, remove_skill
+from skillet.installer.copier import remove_skill
 from skillet.installer.emitters import write_config_files
+from skillet.skills.parser import parse_skill_file
 from skillet.skills.parser import get_skills_from_directory
 from skillet.skills.search import search_skills
 from skillet.operations.add_specs import add_specs, apply_sources_and_emit
-from skillet.sources import apply_all_sources, load_sources, remove_source_entry, sources_json_path
+from skillet.sources import (
+    apply_all_sources,
+    load_sources,
+    remove_source_entry,
+    sources_json_path,
+    upsert_source,
+)
 
-DEFAULT_SKILL_SOURCES: tuple[str, ...] = ("@bundled",)
 
-
-def get_skills_dir() -> Path:
-    """Return bundled skill source directory at repository root ``skills/``."""
-    pkg_dir = Path(__file__).resolve().parent
-    repo_root = pkg_dir.parent.parent
+def get_skills_dir(project_dir: Path | None = None) -> Path:
+    """Return local repository ``skills/`` directory for this project."""
+    repo_root = (project_dir or Path.cwd()).resolve()
     bundled = repo_root / "skills"
     if bundled.is_dir():
         for entry in bundled.iterdir():
@@ -37,58 +41,25 @@ def get_skills_dir() -> Path:
     raise RuntimeError("Cannot find bundled skills at repository root: skills/")
 
 
-def resolve_install_skill_sources(proj_cfg: dict) -> list[str]:
-    """Return configured install source specs with sane defaults."""
-    raw = proj_cfg.get("skill_sources")
-    if not isinstance(raw, list):
-        return list(DEFAULT_SKILL_SOURCES)
-    out = [str(v).strip() for v in raw if str(v).strip()]
-    return out or list(DEFAULT_SKILL_SOURCES)
-
-
-def install_from_skill_sources(
-    project_dir: Path,
-    project_skills: Path,
-    skill_sources: list[str],
-    *,
-    github_token: str | None,
-) -> list[str]:
-    """Install skills from configured sources into `.skillet/skills/`."""
-    errors: list[str] = []
-    if project_skills.exists():
-        shutil.rmtree(project_skills)
-    project_skills.mkdir(parents=True, exist_ok=True)
-
-    copied = 0
-    specs: list[str] = []
-    for source in skill_sources:
-        if source == "@bundled":
-            copied += copy_all_skills(get_skills_dir(), project_skills)
-        else:
-            specs.append(source)
-
-    if copied:
-        click.echo(f"  ✓ Copied {copied} bundled skill(s) to .skillet/skills/")
-
-    source_file = sources_json_path(project_dir)
-    if source_file.exists():
-        source_file.unlink()
-
-    if specs:
-        tracked, add_errors = add_specs(
-            project_dir,
-            specs,
-            skip_existing=False,
-            github_token=github_token,
-        )
-        errors.extend(add_errors)
-        click.echo(f"  ✓ Tracked {tracked} configured source skill(s)")
-        apply_errors = apply_all_sources(
-            project_dir, project_skills, github_token=github_token
-        )
-        errors.extend(apply_errors)
-
-    return errors
+def _seed_default_sources(project_dir: Path) -> int:
+    """Initialize `.skillet/config/sources.json` with bundled local skills when absent."""
+    if load_sources(project_dir):
+        return 0
+    try:
+        bundled = get_skills_dir(project_dir)
+    except RuntimeError:
+        return 0
+    seeded = 0
+    for entry in bundled.iterdir():
+        if not entry.is_dir() or not (entry / "SKILL.md").is_file():
+            continue
+        meta = parse_skill_file(entry / "SKILL.md") or {}
+        name = str(meta.get("name") or entry.name).strip()
+        if not name:
+            continue
+        upsert_source(project_dir, name, {"kind": "local", "source": entry.name})
+        seeded += 1
+    return seeded
 
 
 def get_project_skills_dir(project_dir: Path) -> Path:
@@ -135,16 +106,17 @@ def install(directory: str, skip_config: bool) -> None:
     get_project_config_dir(project_dir).mkdir(parents=True, exist_ok=True)
     proj_cfg = load_project_config(project_dir)
     proj_cfg.setdefault("version", PROJECT_CONFIG_VERSION)
-    proj_cfg["skill_sources"] = resolve_install_skill_sources(proj_cfg)
     save_project_config(project_dir, proj_cfg)
 
+    seeded = _seed_default_sources(project_dir)
+    if seeded:
+        click.echo(f"  ✓ Bootstrapped {seeded} source(s) in .skillet/config/sources.json")
+
+    if project_skills.exists():
+        shutil.rmtree(project_skills)
+    project_skills.mkdir(parents=True, exist_ok=True)
     token = _github_token()
-    install_errors = install_from_skill_sources(
-        project_dir,
-        project_skills,
-        proj_cfg["skill_sources"],
-        github_token=token,
-    )
+    install_errors = apply_all_sources(project_dir, project_skills, github_token=token)
     for msg in install_errors:
         click.echo(f"  ! {msg}", err=True)
 
@@ -193,9 +165,9 @@ def add(spec: str, directory: str) -> None:
         return
 
     if tracked == 1:
-        click.echo("✓ Tracked 1 skill in .skillet/sources.json")
+        click.echo("✓ Tracked 1 skill in .skillet/config/sources.json")
     else:
-        click.echo(f"✓ Tracked {tracked} skill(s) in .skillet/sources.json")
+        click.echo(f"✓ Tracked {tracked} skill(s) in .skillet/config/sources.json")
 
     apply_errors, written = apply_sources_and_emit(
         project_dir, github_token=token
@@ -211,7 +183,7 @@ def add(spec: str, directory: str) -> None:
 @click.argument("name")
 @click.argument("directory", default=".")
 def remove(name: str, directory: str) -> None:
-    """Remove an installed skill from ``.skillet/skills/`` and ``sources.json``."""
+    """Remove an installed skill from ``.skillet/skills/`` and ``.skillet/config/sources.json``."""
     project_dir = Path(directory).resolve()
     project_skills = get_project_skills_dir(project_dir)
 
@@ -236,7 +208,7 @@ def remove(name: str, directory: str) -> None:
 @main.command("sync")
 @click.argument("directory", default=".")
 def sync(directory: str) -> None:
-    """Re-fetch sources from ``.skillet/sources.json`` and refresh native skill directory mirrors."""
+    """Re-fetch sources from ``.skillet/config/sources.json`` and refresh native skill directory mirrors."""
     project_dir = Path(directory).resolve()
     project_skills = get_project_skills_dir(project_dir)
     has_sources = sources_json_path(project_dir).exists() and load_sources(project_dir)
