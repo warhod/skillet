@@ -142,6 +142,53 @@ def test_remove_prunes_skill_from_all_native_trees(
         assert not (tmp_path / base / "git-os").exists()
 
 
+def test_remove_refuses_to_delete_unmanaged_skill(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    unmanaged = tmp_path / ".skillet" / "skills" / "git-os"
+    unmanaged.mkdir(parents=True, exist_ok=True)
+    (unmanaged / "SKILL.md").write_text(
+        "---\nname: git-os\ndescription: user skill\n---\n",
+        encoding="utf-8",
+    )
+    runner = CliRunner()
+
+    r = runner.invoke(main, ["remove", "git-os", str(tmp_path)])
+
+    assert r.exit_code == 0, r.output
+    assert "is not managed by Skillet" in r.output
+    assert unmanaged.exists()
+
+
+def test_add_reports_unmanaged_collision(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    runner = CliRunner()
+    assert runner.invoke(main, ["init", "--skip-config", str(tmp_path)]).exit_code == 0
+
+    unmanaged = tmp_path / ".skillet" / "skills" / "extra-skill"
+    unmanaged.mkdir(parents=True, exist_ok=True)
+    (unmanaged / "SKILL.md").write_text(
+        "---\nname: extra-skill\ndescription: unmanaged\n---\n",
+        encoding="utf-8",
+    )
+
+    ext = tmp_path / "vendor" / "extra-skill"
+    ext.mkdir(parents=True)
+    (ext / "SKILL.md").write_text(
+        "---\nname: extra-skill\ndescription: external\n---\n",
+        encoding="utf-8",
+    )
+
+    r = runner.invoke(main, ["add", "vendor/extra-skill", str(tmp_path)])
+
+    assert r.exit_code == 0, r.output
+    assert "skill already exists (not managed by Skillet), skipping" in r.output
+    assert "Tracked" not in r.output
+
+
 def test_sync_strips_legacy_skillet_files(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

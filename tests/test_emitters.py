@@ -225,3 +225,28 @@ def test_prune_single_target_leaves_other_native_trees(tmp_path: Path) -> None:
     assert not (tmp_path / ".cursor" / "skills").exists()
     assert (tmp_path / ".claude" / "skills" / "one" / "SKILL.md").is_file()
     assert (tmp_path / ".agents" / "skills" / "one" / "SKILL.md").is_file()
+
+
+def test_user_managed_native_skill_survives_prune_cycles(tmp_path: Path) -> None:
+    skills_dir = tmp_path / ".skillet" / "skills"
+    _write_skill(skills_dir, "managed", "by skillet")
+
+    write_config_files(
+        skills_dir,
+        tmp_path,
+        {"claude": False, "cursor": True, "opencode": False},
+    )
+    assert (tmp_path / ".cursor" / "skills" / "managed" / "SKILL.md").is_file()
+
+    user_skill = tmp_path / ".cursor" / "skills" / "my-custom"
+    user_skill.mkdir(parents=True, exist_ok=True)
+    (user_skill / "SKILL.md").write_text("user placed", encoding="utf-8")
+
+    write_config_files(
+        skills_dir,
+        tmp_path,
+        {"claude": False, "cursor": False, "opencode": False},
+    )
+
+    assert not (tmp_path / ".cursor" / "skills" / "managed").exists()
+    assert (tmp_path / ".cursor" / "skills" / "my-custom" / "SKILL.md").is_file()
