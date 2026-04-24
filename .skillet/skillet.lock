@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "skills": {
+    "git-os": {
+      "origin": "local:skills/git-os",
+      "mirrors": [
+        ".agents/skills/git-os/SKILL.md",
+        ".cursor/skills/git-os/SKILL.md"
+      ]
+    },
+    "skill-creator": {
+      "origin": "github:anthropics/skills/skill-creator",
+      "mirrors": [
+        ".agents/skills/skill-creator/SKILL.md",
+        ".cursor/skills/skill-creator/SKILL.md"
+      ]
+    },
+    "pytest-coverage": {
+      "origin": "github:github/awesome-copilot/pytest-coverage",
+      "mirrors": [
+        ".agents/skills/pytest-coverage/SKILL.md",
+        ".cursor/skills/pytest-coverage/SKILL.md"
+      ]
+    }
+  }
+}

@@ -3,6 +3,10 @@
     "kind": "local",
     "source": "git-os"
   },
+  "pytest-coverage": {
+    "kind": "github",
+    "spec": "github/awesome-copilot/pytest-coverage"
+  },
   "skill-creator": {
     "kind": "github",
     "spec": "anthropics/skills/skill-creator"

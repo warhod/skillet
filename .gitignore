@@ -5,6 +5,7 @@ __pycache__/
 *.pyo
 .pytest_cache/
 .coverage
+cov_annotate/
 
 # Python packaging/build artifacts
 *.egg-info/
