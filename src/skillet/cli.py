@@ -95,6 +95,27 @@ def _sync_footer(errors: list[str]) -> str:
     return f"✓ Sync complete! ({count} {noun} during sync)"
 
 
+def _ensure_project_skills_dir(project_dir: Path) -> Path:
+    """Create and return managed project skills directory."""
+    project_skills = get_project_skills_dir(project_dir)
+    project_skills.mkdir(parents=True, exist_ok=True)
+    return project_skills
+
+
+def _print_mirror_lines(written: dict[str, str], *, suffix: str = "mirrored") -> None:
+    """Print mirrored target paths in a consistent CLI format."""
+    tail = f" {suffix}" if suffix else ""
+    for name, _path in written.items():
+        click.echo(f"  ✓ {name}{tail}")
+
+
+def _print_tracked_sources_count(tracked: int) -> None:
+    if tracked == 1:
+        click.echo("✓ Tracked 1 skill in .skillet/config/sources.json")
+        return
+    click.echo(f"✓ Tracked {tracked} skill(s) in .skillet/config/sources.json")
+
+
 def _origin_from_source_spec(spec: dict) -> str:
     kind = str(spec.get("kind", "")).strip()
     if kind == "github":
@@ -178,7 +199,7 @@ def init_cmd(directory: str, skip_config: bool) -> None:
 
     if project_skills.exists():
         shutil.rmtree(project_skills)
-    project_skills.mkdir(parents=True, exist_ok=True)
+    project_skills = _ensure_project_skills_dir(project_dir)
     token = _github_token()
     install_errors, install_summary = apply_all_sources(
         project_dir, project_skills, github_token=token
@@ -197,8 +218,7 @@ def init_cmd(directory: str, skip_config: bool) -> None:
 
     if not skip_config:
         written = _emit_native_mirrors(project_dir)
-        for name, _path in written.items():
-            click.echo(f"  ✓ {name} mirrored")
+        _print_mirror_lines(written)
 
     click.echo("\n✓ Init complete!")
 
@@ -211,8 +231,7 @@ def add(spec: str, directory: str) -> None:
     from skillet.sources import looks_like_local_source_spec
 
     project_dir = Path(directory).resolve()
-    project_skills = get_project_skills_dir(project_dir)
-    project_skills.mkdir(parents=True, exist_ok=True)
+    _ensure_project_skills_dir(project_dir)
     token = _github_token()
 
     tracked, pre_errors = add_specs(
@@ -233,10 +252,7 @@ def add(spec: str, directory: str) -> None:
             click.echo("No installable skills found (missing names or empty source).")
         return
 
-    if tracked == 1:
-        click.echo("✓ Tracked 1 skill in .skillet/config/sources.json")
-    else:
-        click.echo(f"✓ Tracked {tracked} skill(s) in .skillet/config/sources.json")
+    _print_tracked_sources_count(tracked)
 
     apply_errors, written, add_summary = apply_sources_and_emit(
         project_dir, github_token=token
@@ -247,8 +263,7 @@ def add(spec: str, directory: str) -> None:
     ):
         click.echo(line)
 
-    for fname, _ in written.items():
-        click.echo(f"  ✓ {fname} mirrored")
+    _print_mirror_lines(written)
 
 
 @main.command("remove")
@@ -257,10 +272,7 @@ def add(spec: str, directory: str) -> None:
 def remove(name: str, directory: str) -> None:
     """Remove an installed skill."""
     project_dir = Path(directory).resolve()
-    project_skills = get_project_skills_dir(project_dir)
-
-    if not project_skills.exists():
-        project_skills.mkdir(parents=True, exist_ok=True)
+    project_skills = _ensure_project_skills_dir(project_dir)
 
     if not is_managed(project_dir, name):
         click.echo(f"Skill '{name}' is not managed by Skillet")
@@ -278,8 +290,7 @@ def remove(name: str, directory: str) -> None:
 
     if project_skills.exists():
         written = _emit_native_mirrors(project_dir)
-        for fname, _ in written.items():
-            click.echo(f"  ✓ {fname} mirrored")
+        _print_mirror_lines(written)
 
 
 @main.command("sync")
@@ -294,7 +305,7 @@ def sync(directory: str) -> None:
         click.echo("No skills installed. Run 'skillet init' first.")
         return
 
-    project_skills.mkdir(parents=True, exist_ok=True)
+    project_skills = _ensure_project_skills_dir(project_dir)
     token = _github_token()
     source_errors, sync_summary = apply_all_sources(
         project_dir, project_skills, github_token=token
@@ -305,8 +316,7 @@ def sync(directory: str) -> None:
     written = _emit_native_mirrors(project_dir)
 
     click.echo("\nUpdated native skill directories:")
-    for name, _path in written.items():
-        click.echo(f"  ✓ {name}")
+    _print_mirror_lines(written, suffix="")
     for line in _materialize_summary_lines(
         sync_summary, had_apply_errors=bool(source_errors)
     ):

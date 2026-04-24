@@ -58,6 +58,106 @@ def _download_http_zip(url: str, dest_dir: Path) -> None:
         raise RuntimeError(f"Failed to download zip: {e}") from e
 
 
+def _existing_mirrors(project_dir: Path, skill_name: str) -> list[str]:
+    """Return existing non-empty mirror paths for a managed skill."""
+    existing_entry = load_lock(project_dir).get("skills", {}).get(skill_name, {})
+    mirrors = (
+        existing_entry.get("mirrors")
+        if isinstance(existing_entry, dict) and isinstance(existing_entry.get("mirrors"), list)
+        else []
+    )
+    return [m for m in mirrors if isinstance(m, str) and m.strip()]
+
+
+def _record_skill_with_existing_mirrors(
+    project_dir: Path, skill_name: str, *, origin: str, mirrors: list[str]
+) -> None:
+    record_skill(project_dir, skill_name, origin=origin, mirrors=mirrors)
+
+
+def _apply_local_spec(
+    project_dir: Path,
+    skills_dest: Path,
+    skill_name: str,
+    spec: dict[str, Any],
+    mirrors: list[str],
+) -> str | None:
+    rel = str(spec.get("path", "")).strip()
+    local_source = str(spec.get("source", "")).strip()
+    if not rel and local_source:
+        rel = (Path("skills") / local_source).as_posix()
+    if not rel:
+        return "local spec missing path/source"
+    src = (project_dir / rel).resolve()
+    if not src.exists():
+        return f"local path does not exist: {rel}"
+    if not src.is_dir() or not (src / "SKILL.md").exists():
+        return f"not a skill directory (missing SKILL.md): {rel}"
+    copy_skill(src, skills_dest / skill_name)
+    _record_skill_with_existing_mirrors(
+        project_dir, skill_name, origin=f"local:{rel}", mirrors=mirrors
+    )
+    return None
+
+
+def _apply_http_zip_spec(
+    project_dir: Path,
+    skills_dest: Path,
+    skill_name: str,
+    spec: dict[str, Any],
+    mirrors: list[str],
+) -> str | None:
+    url = str(spec.get("url", "")).strip()
+    if not url:
+        return "http_zip spec missing url"
+    target = skills_dest / skill_name
+    if target.exists():
+        shutil.rmtree(target)
+    try:
+        _download_http_zip(url, skills_dest)
+    except Exception as e:
+        return str(e)
+    _record_skill_with_existing_mirrors(
+        project_dir, skill_name, origin=f"http_zip:{url}", mirrors=mirrors
+    )
+    return None
+
+
+def _apply_github_spec(
+    project_dir: Path,
+    skills_dest: Path,
+    skill_name: str,
+    spec: dict[str, Any],
+    mirrors: list[str],
+    *,
+    github_token: str | None,
+) -> str | None:
+    spec_str = str(spec.get("spec", "") or spec.get("github", "")).strip()
+    if not spec_str:
+        return "github spec missing spec"
+    sources_mod = importlib.import_module("skillet.sources")
+    resolving = sources_mod.resolving
+    try:
+        with resolving(spec_str, cwd=project_dir, token=github_token) as r:
+            dirs = list(r.skill_directories)
+            if not dirs:
+                return "no SKILL.md directories found in github archive"
+            chosen = _pick_github_skill_dir(dirs, skill_name)
+            if chosen is None:
+                return (
+                    "ambiguous github source (multiple skills); use owner/repo/path "
+                    f"or match directory / frontmatter name to '{skill_name}'"
+                )
+            # Copy before leaving the context; temp extraction is cleaned on exit.
+            copy_skill(chosen, skills_dest / skill_name)
+    except Exception as e:
+        return str(e)
+    _record_skill_with_existing_mirrors(
+        project_dir, skill_name, origin=f"github:{spec_str}", mirrors=mirrors
+    )
+    return None
+
+
 def _apply_one(
     skill_name: str,
     spec: dict[str, Any],
@@ -70,80 +170,22 @@ def _apply_one(
     if dest.exists() and not is_managed(project_dir, skill_name):
         return "skill already exists (not managed by Skillet), skipping"
 
-    existing_entry = load_lock(project_dir).get("skills", {}).get(skill_name, {})
-    existing_mirrors = (
-        existing_entry.get("mirrors")
-        if isinstance(existing_entry, dict) and isinstance(existing_entry.get("mirrors"), list)
-        else []
-    )
+    existing_mirrors = _existing_mirrors(project_dir, skill_name)
 
     kind = spec.get("kind")
     if kind == "local":
-        rel = str(spec.get("path", "")).strip()
-        local_source = str(spec.get("source", "")).strip()
-        if not rel and local_source:
-            rel = (Path("skills") / local_source).as_posix()
-        if not rel:
-            return "local spec missing path/source"
-        src = (project_dir / rel).resolve()
-        if not src.exists():
-            return f"local path does not exist: {rel}"
-        if not src.is_dir() or not (src / "SKILL.md").exists():
-            return f"not a skill directory (missing SKILL.md): {rel}"
-        copy_skill(src, dest)
-        record_skill(
-            project_dir,
-            skill_name,
-            origin=f"local:{rel}",
-            mirrors=[m for m in existing_mirrors if isinstance(m, str) and m.strip()],
-        )
-        return None
+        return _apply_local_spec(project_dir, skills_dest, skill_name, spec, existing_mirrors)
     if kind == "http_zip":
-        url = str(spec.get("url", "")).strip()
-        if not url:
-            return "http_zip spec missing url"
-        target = skills_dest / skill_name
-        if target.exists():
-            shutil.rmtree(target)
-        try:
-            _download_http_zip(url, skills_dest)
-        except Exception as e:
-            return str(e)
-        record_skill(
-            project_dir,
-            skill_name,
-            origin=f"http_zip:{url}",
-            mirrors=[m for m in existing_mirrors if isinstance(m, str) and m.strip()],
-        )
-        return None
+        return _apply_http_zip_spec(project_dir, skills_dest, skill_name, spec, existing_mirrors)
     if kind == "github":
-        spec_str = str(spec.get("spec", "") or spec.get("github", "")).strip()
-        if not spec_str:
-            return "github spec missing spec"
-        sources_mod = importlib.import_module("skillet.sources")
-        resolving = sources_mod.resolving
-        try:
-            with resolving(spec_str, cwd=project_dir, token=github_token) as r:
-                dirs = list(r.skill_directories)
-                if not dirs:
-                    return "no SKILL.md directories found in github archive"
-                chosen = _pick_github_skill_dir(dirs, skill_name)
-                if chosen is None:
-                    return (
-                        "ambiguous github source (multiple skills); use owner/repo/path "
-                        f"or match directory / frontmatter name to '{skill_name}'"
-                    )
-                # Copy before leaving the context; temp extraction is cleaned on exit.
-                copy_skill(chosen, dest)
-        except Exception as e:
-            return str(e)
-        record_skill(
+        return _apply_github_spec(
             project_dir,
+            skills_dest,
             skill_name,
-            origin=f"github:{spec_str}",
-            mirrors=[m for m in existing_mirrors if isinstance(m, str) and m.strip()],
+            spec,
+            existing_mirrors,
+            github_token=github_token,
         )
-        return None
     return f"unknown source kind: {kind!r}"
 
 

@@ -29,6 +29,27 @@ class GitHubSourceSpec:
     """Directory path inside the repo root for a single skill, or None for all skills."""
 
 
+def _split_spec_and_ref(spec: str) -> tuple[str, str | None]:
+    """Split ``owner/repo/...@ref`` into path part and optional ref."""
+    s = spec.strip()
+    if "@" not in s:
+        return s, None
+    left, ref = s.rsplit("@", 1)
+    ref = ref.strip()
+    if not ref:
+        msg = f"Invalid ref in source spec: {spec!r}"
+        raise ValueError(msg)
+    return left, ref
+
+
+def _validate_owner_repo(owner: str, repo: str, spec: str) -> None:
+    """Validate owner/repo tokens in a GitHub source spec."""
+    for label, value in (("owner", owner), ("repo", repo)):
+        if not _OWNER_REPO_PART.match(value):
+            msg = f"Invalid GitHub {label} in source spec: {spec!r}"
+            raise ValueError(msg)
+
+
 def parse_github_source_spec(spec: str) -> GitHubSourceSpec:
     """Parse a GitHub source string. Caller should ensure this is not a local path spec."""
     s = spec.strip()
@@ -36,14 +57,7 @@ def parse_github_source_spec(spec: str) -> GitHubSourceSpec:
         msg = f"Invalid GitHub source spec (expected owner/repo): {spec!r}"
         raise ValueError(msg)
 
-    if "@" in s:
-        left, ref = s.rsplit("@", 1)
-        ref = ref.strip()
-        if not ref:
-            msg = f"Invalid ref in source spec: {spec!r}"
-            raise ValueError(msg)
-    else:
-        left, ref = s, None
+    left, ref = _split_spec_and_ref(s)
 
     parts = [p for p in left.strip().split("/") if p]
     if len(parts) < 2:
@@ -51,10 +65,7 @@ def parse_github_source_spec(spec: str) -> GitHubSourceSpec:
         raise ValueError(msg)
 
     owner, repo = parts[0], parts[1]
-    for label, value in (("owner", owner), ("repo", repo)):
-        if not _OWNER_REPO_PART.match(value):
-            msg = f"Invalid GitHub {label} in source spec: {spec!r}"
-            raise ValueError(msg)
+    _validate_owner_repo(owner, repo, spec)
 
     skill_subpath = "/".join(parts[2:]) if len(parts) > 2 else None
     if skill_subpath == "":
@@ -135,17 +146,17 @@ def discover_skill_directories(repo_root: Path) -> list[Path]:
     return sorted(found, key=lambda p: str(p.relative_to(repo_root)))
 
 
-def _select_skill_directories(
-    repo_root: Path,
-    skill_subpath: str | None,
-) -> list[Path]:
-    if skill_subpath is None:
-        dirs = discover_skill_directories(repo_root)
-        if not dirs:
-            msg = f"No SKILL.md found under extracted repo root {repo_root}"
-            raise ValueError(msg)
-        return dirs
-    root = repo_root.resolve()
+def _is_within_root(path: Path, root: Path) -> bool:
+    """Whether ``path`` is contained by ``root``."""
+    try:
+        path.relative_to(root)
+        return True
+    except ValueError:
+        return False
+
+
+def _skill_subpath_candidates(repo_root: Path, skill_subpath: str) -> list[Path]:
+    """Candidate skill directories for a subpath selector."""
     direct = (repo_root / skill_subpath).resolve()
     candidates: list[Path] = [direct]
     if "/" not in skill_subpath:
@@ -157,11 +168,24 @@ def _select_skill_directories(
                 (repo_root / ".claude" / "skills" / skill_subpath).resolve(),
             ]
         )
+    return candidates
+
+
+def _select_skill_directories(
+    repo_root: Path,
+    skill_subpath: str | None,
+) -> list[Path]:
+    if skill_subpath is None:
+        dirs = discover_skill_directories(repo_root)
+        if not dirs:
+            msg = f"No SKILL.md found under extracted repo root {repo_root}"
+            raise ValueError(msg)
+        return dirs
+    root = repo_root.resolve()
+    candidates = _skill_subpath_candidates(repo_root, skill_subpath)
 
     for target in candidates:
-        try:
-            target.relative_to(root)
-        except ValueError:
+        if not _is_within_root(target, root):
             continue
         if (target / "SKILL.md").is_file():
             return [target]
@@ -193,6 +217,42 @@ def _extract_strip_topdir(archive: bytes, dest: Path) -> Path:
     return dest
 
 
+def _refs_to_try(source: GitHubSourceSpec) -> list[str]:
+    """Return refs to try in priority order for tarball download."""
+    if source.ref is not None:
+        return [source.ref]
+    return ["main", "master"]
+
+
+def _download_archive_for_source(
+    source: GitHubSourceSpec,
+    *,
+    token: str | None,
+    client: httpx.Client,
+) -> bytes:
+    refs_order = _refs_to_try(source)
+    archive: bytes | None = None
+    last: Exception | None = None
+    for ref in refs_order:
+        try:
+            archive = _download_first_available(
+                source.owner, source.repo, ref, token=token, client=client
+            )
+            break
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 404 and source.ref is None:
+                last = e
+                continue
+            raise
+    if archive is not None:
+        return archive
+    msg = (
+        f"Could not download {source.owner}/{source.repo}"
+        + (f"@{source.ref}" if source.ref else " (tried main, master)")
+    )
+    raise RuntimeError(msg) from last
+
+
 def fetch_github_skill_directories(
     source: GitHubSourceSpec,
     *,
@@ -207,28 +267,7 @@ def fetch_github_skill_directories(
     own_client = client is None
     http = client or httpx.Client(timeout=60.0, follow_redirects=True)
     try:
-        refs_order = [source.ref] if source.ref is not None else ["main", "master"]
-        archive: bytes | None = None
-        last: Exception | None = None
-        for ref in refs_order:
-            if ref is None:
-                continue
-            try:
-                archive = _download_first_available(
-                    source.owner, source.repo, ref, token=token, client=http
-                )
-                break
-            except httpx.HTTPStatusError as e:
-                if e.response.status_code == 404 and source.ref is None:
-                    last = e
-                    continue
-                raise
-        if archive is None:
-            msg = (
-                f"Could not download {source.owner}/{source.repo}"
-                + (f"@{source.ref}" if source.ref else " (tried main, master)")
-            )
-            raise RuntimeError(msg) from last
+        archive = _download_archive_for_source(source, token=token, client=http)
     finally:
         if own_client:
             http.close()

@@ -15,6 +15,48 @@ _LEGACY_TO_REMOVE: tuple[Path, ...] = (
 )
 
 
+def _iter_lock_skill_entries(lock: dict) -> list[dict]:
+    """Return mutable lock skill entries that are dictionaries."""
+    skills = lock.get("skills", {})
+    if not isinstance(skills, dict):
+        return []
+    return [entry for entry in skills.values() if isinstance(entry, dict)]
+
+
+def _remove_mirror_from_lock_entries(entries: list[dict], rel_skill_md: str) -> bool:
+    """Drop one mirror path from lock entries; return True if it was removed."""
+    for entry in entries:
+        mirrors = entry.get("mirrors")
+        if not isinstance(mirrors, list):
+            continue
+        if rel_skill_md not in mirrors:
+            continue
+        entry["mirrors"] = [m for m in mirrors if m != rel_skill_md]
+        return True
+    return False
+
+
+def _tracked_mirror_dirs(entries: list[dict], dest_root: Path, project_dir: Path) -> set[str]:
+    """Return mirror directory paths under dest_root tracked in lock."""
+    tracked: set[str] = set()
+    for entry in entries:
+        mirrors = entry.get("mirrors")
+        if not isinstance(mirrors, list):
+            continue
+        for mirror in mirrors:
+            if not isinstance(mirror, str) or not mirror.strip():
+                continue
+            mirror_path = Path(mirror)
+            # Lock mirrors may be either ".../<skill>/SKILL.md" or ".../<skill>".
+            skill_dir_rel = (
+                mirror_path.parent if mirror_path.name == "SKILL.md" else mirror_path
+            )
+            skill_dir_abs = project_dir / skill_dir_rel
+            if skill_dir_abs.parent == dest_root:
+                tracked.add(skill_dir_rel.as_posix())
+    return tracked
+
+
 def _remove_legacy_rule_and_index_files(project_dir: Path) -> None:
     """Delete rule/index files from older Skillet versions if present."""
     for rel in _LEGACY_TO_REMOVE:
@@ -44,7 +86,7 @@ def _prune_disabled_emitters(project_dir: Path, config: dict) -> None:
     """Remove mirrored skill trees when no enabled agent uses that root."""
     needed = _native_rel_paths_needed(config)
     lock = load_lock(project_dir)
-    skills = lock.get("skills", {})
+    lock_entries = _iter_lock_skill_entries(lock)
     for rel in {p for p in AGENT_NATIVE_SKILL_REL_PATH.values() if p}:
         if rel in needed:
             continue
@@ -55,18 +97,7 @@ def _prune_disabled_emitters(project_dir: Path, config: dict) -> None:
             if not entry.is_dir():
                 continue
             rel_skill_md = (entry / "SKILL.md").relative_to(project_dir).as_posix()
-            owned = False
-            for lock_entry in skills.values():
-                if not isinstance(lock_entry, dict):
-                    continue
-                mirrors = lock_entry.get("mirrors")
-                if not isinstance(mirrors, list):
-                    continue
-                if rel_skill_md in mirrors:
-                    owned = True
-                    lock_entry["mirrors"] = [m for m in mirrors if m != rel_skill_md]
-                    break
-            if owned:
+            if _remove_mirror_from_lock_entries(lock_entries, rel_skill_md):
                 shutil.rmtree(entry)
         if tree.is_dir() and not any(tree.iterdir()):
             tree.rmdir()
@@ -88,23 +119,18 @@ def emit_native_skills(skills_dir: Path, dest_root: Path, project_dir: Path | No
 
     managed_mirror_dirs: set[str] = set()
     lock: dict | None = None
+    lock_entries: list[dict] = []
     if project_dir is not None:
         lock = load_lock(project_dir)
-        for entry in lock.get("skills", {}).values():
-            if not isinstance(entry, dict):
-                continue
-            mirrors = entry.get("mirrors")
-            if not isinstance(mirrors, list):
-                continue
-            for mirror in mirrors:
-                if not isinstance(mirror, str) or not mirror.strip():
-                    continue
-                p = project_dir / mirror
-                if p.parent == dest_root:
-                    managed_mirror_dirs.add(p.parent.relative_to(project_dir).as_posix())
+        lock_entries = _iter_lock_skill_entries(lock)
+        managed_mirror_dirs = _tracked_mirror_dirs(lock_entries, dest_root, project_dir)
 
     for child in dest_root.iterdir():
         if not child.is_dir() or child.name in valid_names:
+            continue
+        # ``unrecord_skill`` may have removed only SKILL.md, leaving an empty dir behind.
+        if not any(child.iterdir()):
+            shutil.rmtree(child)
             continue
         if project_dir is None:
             shutil.rmtree(child)
@@ -112,13 +138,7 @@ def emit_native_skills(skills_dir: Path, dest_root: Path, project_dir: Path | No
         rel_child = child.relative_to(project_dir).as_posix()
         if rel_child in managed_mirror_dirs:
             rel_skill_md = (child / "SKILL.md").relative_to(project_dir).as_posix()
-            for entry in lock.get("skills", {}).values():
-                if not isinstance(entry, dict):
-                    continue
-                mirrors = entry.get("mirrors")
-                if not isinstance(mirrors, list):
-                    continue
-                entry["mirrors"] = [m for m in mirrors if m != rel_skill_md]
+            _remove_mirror_from_lock_entries(lock_entries, rel_skill_md)
             shutil.rmtree(child)
 
     for name in sorted(valid_names, key=str.lower):
