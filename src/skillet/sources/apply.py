@@ -13,6 +13,7 @@ from typing import Any
 import httpx
 
 from skillet.installer.copier import copy_skill
+from skillet.installer.lock import is_managed, load_lock, record_skill
 from skillet.skills.parser import parse_skill_file
 from skillet.sources.store import load_sources
 
@@ -65,6 +66,17 @@ def _apply_one(
     *,
     github_token: str | None,
 ) -> str | None:
+    dest = skills_dest / skill_name
+    if dest.exists() and not is_managed(project_dir, skill_name):
+        return "skill already exists (not managed by Skillet), skipping"
+
+    existing_entry = load_lock(project_dir).get("skills", {}).get(skill_name, {})
+    existing_mirrors = (
+        existing_entry.get("mirrors")
+        if isinstance(existing_entry, dict) and isinstance(existing_entry.get("mirrors"), list)
+        else []
+    )
+
     kind = spec.get("kind")
     if kind == "local":
         rel = str(spec.get("path", "")).strip()
@@ -78,10 +90,13 @@ def _apply_one(
             return f"local path does not exist: {rel}"
         if not src.is_dir() or not (src / "SKILL.md").exists():
             return f"not a skill directory (missing SKILL.md): {rel}"
-        dest = skills_dest / skill_name
-        if dest.exists():
-            shutil.rmtree(dest)
         copy_skill(src, dest)
+        record_skill(
+            project_dir,
+            skill_name,
+            origin=f"local:{rel}",
+            mirrors=[m for m in existing_mirrors if isinstance(m, str) and m.strip()],
+        )
         return None
     if kind == "http_zip":
         url = str(spec.get("url", "")).strip()
@@ -94,6 +109,12 @@ def _apply_one(
             _download_http_zip(url, skills_dest)
         except Exception as e:
             return str(e)
+        record_skill(
+            project_dir,
+            skill_name,
+            origin=f"http_zip:{url}",
+            mirrors=[m for m in existing_mirrors if isinstance(m, str) and m.strip()],
+        )
         return None
     if kind == "github":
         spec_str = str(spec.get("spec", "") or spec.get("github", "")).strip()
@@ -112,13 +133,16 @@ def _apply_one(
                         "ambiguous github source (multiple skills); use owner/repo/path "
                         f"or match directory / frontmatter name to '{skill_name}'"
                     )
-                dest = skills_dest / skill_name
-                if dest.exists():
-                    shutil.rmtree(dest)
                 # Copy before leaving the context; temp extraction is cleaned on exit.
                 copy_skill(chosen, dest)
         except Exception as e:
             return str(e)
+        record_skill(
+            project_dir,
+            skill_name,
+            origin=f"github:{spec_str}",
+            mirrors=[m for m in existing_mirrors if isinstance(m, str) and m.strip()],
+        )
         return None
     return f"unknown source kind: {kind!r}"
 

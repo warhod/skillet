@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
+from skillet.installer.lock import is_managed
 from skillet.skills.parser import parse_skill_file
 from skillet.sources import (
     MaterializeSummary,
@@ -61,6 +62,10 @@ def add_specs(
     errors: list[str] = []
     tracked = 0
 
+    def _unmanaged_collision(skill_name: str) -> bool:
+        skill_file = project_skills / skill_name / "SKILL.md"
+        return skill_file.exists() and not is_managed(project_dir, skill_name)
+
     for spec in specs:
         s = spec.strip()
         if not s:
@@ -69,6 +74,9 @@ def add_specs(
         parsed = _parse_local_add_spec(s, project_dir)
         if parsed is not None:
             name, source_spec = parsed
+            if _unmanaged_collision(name):
+                errors.append(f"{name}: skill already exists (not managed by Skillet), skipping")
+                continue
             if skip_existing and name in existing:
                 continue
             upsert_source(project_dir, name, source_spec)
@@ -109,6 +117,9 @@ def add_specs(
             meta = parse_skill_file(d / "SKILL.md") or {}
             name = str(meta.get("name") or d.name).strip()
             if not name:
+                continue
+            if _unmanaged_collision(name):
+                errors.append(f"{name}: skill already exists (not managed by Skillet), skipping")
                 continue
             if skip_existing and name in existing:
                 continue

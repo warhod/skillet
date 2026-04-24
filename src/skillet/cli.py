@@ -17,6 +17,7 @@ from skillet.config.settings import load_config
 from skillet.config.wizard import run_config_wizard
 from skillet.installer.copier import remove_skill
 from skillet.installer.emitters import write_config_files
+from skillet.installer.lock import is_managed, load_lock, record_skill, unrecord_skill
 from skillet.skills.parser import parse_skill_file
 from skillet.skills.parser import get_skills_from_directory
 from skillet.skills.search import search_skills
@@ -94,6 +95,37 @@ def _sync_footer(errors: list[str]) -> str:
     return f"✓ Sync complete! ({count} {noun} during sync)"
 
 
+def _origin_from_source_spec(spec: dict) -> str:
+    kind = str(spec.get("kind", "")).strip()
+    if kind == "github":
+        return f"github:{str(spec.get('spec', '')).strip()}"
+    if kind == "local":
+        path = str(spec.get("path", "")).strip()
+        if path:
+            return f"local:{path}"
+        source = str(spec.get("source", "")).strip()
+        if source:
+            return f"local:skills/{source}"
+        return "local"
+    if kind == "http_zip":
+        return f"http_zip:{str(spec.get('url', '')).strip()}"
+    return kind or "unknown"
+
+
+def _record_applied_skills(project_dir: Path, summary: MaterializeSummary) -> None:
+    lock = load_lock(project_dir)
+    sources = load_sources(project_dir)
+    for name in (set(summary.added) | set(summary.unchanged)):
+        spec = sources.get(name)
+        if not isinstance(spec, dict):
+            continue
+        mirrors: list[str] = []
+        entry = lock.get("skills", {}).get(name, {})
+        if isinstance(entry, dict) and isinstance(entry.get("mirrors"), list):
+            mirrors = [m for m in entry["mirrors"] if isinstance(m, str) and m.strip()]
+        record_skill(project_dir, name, origin=_origin_from_source_spec(spec), mirrors=mirrors)
+
+
 def _materialize_summary_lines(
     summary: MaterializeSummary, *, had_apply_errors: bool
 ) -> list[str]:
@@ -151,6 +183,7 @@ def init_cmd(directory: str, skip_config: bool) -> None:
     install_errors, install_summary = apply_all_sources(
         project_dir, project_skills, github_token=token
     )
+    _record_applied_skills(project_dir, install_summary)
     _print_sync_errors(install_errors)
     for line in _materialize_summary_lines(
         install_summary, had_apply_errors=bool(install_errors)
@@ -229,8 +262,13 @@ def remove(name: str, directory: str) -> None:
     if not project_skills.exists():
         project_skills.mkdir(parents=True, exist_ok=True)
 
+    if not is_managed(project_dir, name):
+        click.echo(f"Skill '{name}' is not managed by Skillet")
+        return
+
     removed_dir = remove_skill(project_skills, name)
     removed_source = remove_source_entry(project_dir, name)
+    unrecord_skill(project_dir, name)
 
     if not removed_dir and not removed_source:
         click.echo(f"Skill '{name}' not found")
@@ -261,6 +299,7 @@ def sync(directory: str) -> None:
     source_errors, sync_summary = apply_all_sources(
         project_dir, project_skills, github_token=token
     )
+    _record_applied_skills(project_dir, sync_summary)
     _print_sync_errors(source_errors)
 
     written = _emit_native_mirrors(project_dir)
