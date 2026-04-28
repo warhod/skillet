@@ -1,5 +1,5 @@
 [project]
-name = "skillet"
+name = "agent-skillet"
 version = "0.1.0"
 description = "AI agent skills for developer workflows — git discipline, PR automation, and skill management."
 readme = "README.md"
