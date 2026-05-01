@@ -59,12 +59,6 @@ def _download_http_zip(url: str, dest_dir: Path) -> None:
         raise RuntimeError(f"Failed to download zip: {e}") from e
 
 
-def _record_skill_with_existing_mirrors(
-    project_dir: Path, skill_name: str, *, origin: str, mirrors: list[str]
-) -> None:
-    record_skill(project_dir, skill_name, origin=origin, mirrors=mirrors)
-
-
 def _apply_local_spec(
     project_dir: Path,
     skills_dest: Path,
@@ -84,9 +78,7 @@ def _apply_local_spec(
     if not src.is_dir() or not (src / "SKILL.md").exists():
         return f"not a skill directory (missing SKILL.md): {rel}"
     copy_skill(src, skills_dest / skill_name)
-    _record_skill_with_existing_mirrors(
-        project_dir, skill_name, origin=f"local:{rel}", mirrors=mirrors
-    )
+    record_skill(project_dir, skill_name, origin=f"local:{rel}", mirrors=mirrors)
     return None
 
 
@@ -107,9 +99,7 @@ def _apply_http_zip_spec(
         _download_http_zip(url, skills_dest)
     except Exception as e:
         return str(e)
-    _record_skill_with_existing_mirrors(
-        project_dir, skill_name, origin=f"http_zip:{url}", mirrors=mirrors
-    )
+    record_skill(project_dir, skill_name, origin=f"http_zip:{url}", mirrors=mirrors)
     return None
 
 
@@ -145,9 +135,7 @@ def _apply_github_spec(
         return str(e)
     finally:
         cleanup()
-    _record_skill_with_existing_mirrors(
-        project_dir, skill_name, origin=f"github:{spec_str}", mirrors=mirrors
-    )
+    record_skill(project_dir, skill_name, origin=f"github:{spec_str}", mirrors=mirrors)
     return None
 
 

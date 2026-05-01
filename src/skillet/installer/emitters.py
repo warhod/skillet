@@ -63,11 +63,9 @@ def _remove_legacy_rule_and_index_files(project_dir: Path) -> None:
         p = project_dir / rel
         if p.is_file():
             p.unlink()
-        # Remove empty parent dirs for rules only (e.g. .github if empty)
-        if rel.as_posix() == ".github/copilot-instructions.md":
-            gh = project_dir / ".github"
-            if gh.is_dir() and not any(gh.iterdir()):
-                gh.rmdir()
+        parent = p.parent
+        if parent != project_dir and parent.is_dir() and not any(parent.iterdir()):
+            parent.rmdir()
 
 
 def _native_rel_paths_needed(config: dict) -> set[str]:

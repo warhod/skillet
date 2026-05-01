@@ -2,7 +2,6 @@ import html
 import re
 from collections.abc import Callable
 from pathlib import Path
-from typing import Optional
 
 import ruamel.yaml
 
@@ -20,7 +19,7 @@ def parse_frontmatter(content: str) -> dict:
         return {}
 
 
-def parse_skill_file(skill_path: Path) -> Optional[dict]:
+def parse_skill_file(skill_path: Path) -> dict | None:
     """Parse a SKILL.md file and extract metadata."""
     if not skill_path.exists():
         return None
