@@ -28,6 +28,13 @@
         ".agents/skills/python-design-patterns/SKILL.md",
         ".cursor/skills/python-design-patterns/SKILL.md"
       ]
+    },
+    "deploy-checklist": {
+      "origin": "local:skills/deploy-checklist",
+      "mirrors": [
+        ".agents/skills/deploy-checklist/SKILL.md",
+        ".cursor/skills/deploy-checklist/SKILL.md"
+      ]
     }
   }
 }

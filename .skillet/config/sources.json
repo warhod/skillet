@@ -3,6 +3,10 @@
     "kind": "local",
     "source": "git-os"
   },
+  "deploy-checklist": {
+    "kind": "local",
+    "source": "deploy-checklist"
+  },
   "pytest-coverage": {
     "kind": "github",
     "source": "github/awesome-copilot/pytest-coverage"

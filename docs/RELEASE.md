@@ -2,6 +2,14 @@
 
 This runbook documents the release process for publishing `agent-skillet` to PyPI.
 
+## Version: single source of truth
+
+The **only** version you maintain by hand is **`version` in `pyproject.toml`** (`[project]`). The build copies that into wheel/sdist **package metadata**, and PyPI indexes that value.
+
+At runtime, `skillet.__version__` (and thus `skillet --version`, `agent-skillet --version`, and the GitHub `User-Agent` string) is read with **`importlib.metadata.version("agent-skillet")`**, which returns whatever metadata was installed—so it always matches the shipped package. If the importable package is not installed (rare; e.g. bare `PYTHONPATH` without a install), the code falls back to `0.0.0+unknown`.
+
+**Bump checklist:** edit `pyproject.toml` → run `uv lock` → commit → tag **`v`**`X.Y.Z` matching that version (see `release.yml` guard) → publish the GitHub Release. Do not reintroduce a hardcoded `__version__` string in `src/skillet/__init__.py`; it would drift from PyPI.
+
 ## When to create the tag
 
 **Tag only after the release commit is on `main`**, not on a feature or PR branch.
@@ -53,29 +61,9 @@ pyproject.toml      # distribution name is "agent-skillet"
 ## Install docs to update in README (after publish)
 
 ```bash
-uvx agent-skillet install         # one-off, no install, runs `skillet install`
-uv tool install agent-skillet     # global -- puts `skillet` command on PATH
+uvx agent-skillet init            # one-off run; needs script name = package name (0.1.1+)
+uv tool install agent-skillet     # global; installs `skillet` and `agent-skillet` on PATH
 ```
-
-## 0.1.0 checklist (dogfooding)
-
-1. Confirm `pyproject.toml` has:
-   - `name = "agent-skillet"`
-   - `version = "0.1.0"`
-2. Merge/rebase latest `main`.
-3. Run local checks:
-   - `uv sync`
-   - `ruff check`
-   - `pytest`
-4. Open a PR, get review, merge the version bump to `main`.
-5. On `main` (`git checkout main && git pull`), create and push tag `v0.1.0`.
-6. Wait for `release.yml` to create a draft release.
-7. Open GitHub Releases, review draft notes/artifacts, click **Publish release**.
-8. Verify `publish.yml` succeeded.
-9. Verify package on PyPI:
-   - `uvx agent-skillet --version`
-10. Smoke test in a clean directory:
-    - `uvx agent-skillet init`
 
 ## Troubleshooting
 
