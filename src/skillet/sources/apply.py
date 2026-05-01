@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import io
-import os
 import shutil
 import zipfile
 from pathlib import Path

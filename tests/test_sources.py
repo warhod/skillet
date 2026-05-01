@@ -1,10 +1,8 @@
 import json
-from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
 
-import skillet.sources as skillet_sources_mod
 from skillet.sources.apply import apply_all_sources
 from skillet.sources.store import (
     load_sources,
