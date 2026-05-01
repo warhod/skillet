@@ -227,7 +227,20 @@ def init_cmd(directory: str, skip_config: bool) -> None:
 @click.argument("spec")
 @click.argument("directory", default=".")
 def add(spec: str, directory: str) -> None:
-    """Add skills from a local skills directory or GitHub."""
+    """Add skills from a local path or a GitHub repository.
+
+    \b
+    GitHub spec format:  owner/repo[/subpath][@ref]
+    Examples:
+      skillet add anthropics/skills/skill-creator
+      skillet add anthropics/skills/skill-creator@main
+      skillet add myorg/shared-skills
+
+    \b
+    Local spec format:   ./path/to/skill-dir
+    Example:
+      skillet add ./team-skills/checkout-flow
+    """
     from skillet.sources import looks_like_local_source_spec
 
     project_dir = Path(directory).resolve()

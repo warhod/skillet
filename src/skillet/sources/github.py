@@ -51,7 +51,14 @@ def _validate_owner_repo(owner: str, repo: str, spec: str) -> None:
 
 
 def parse_github_source_spec(spec: str) -> GitHubSourceSpec:
-    """Parse a GitHub source string. Caller should ensure this is not a local path spec."""
+    """Parse a GitHub source string. Caller should ensure this is not a local path spec.
+
+    Accepts ``owner/repo`` or ``owner/repo/subpath`` form.
+    Example:
+      parse_github_source_spec("anthropics/skills/skill-creator")
+      parse_github_source_spec("anthropics/skills/skill-creator@main")
+      parse_github_source_spec("anthropics/skills/skill-creator@v1.0.0")
+    """
     s = spec.strip()
     if not s or "/" not in s:
         msg = f"Invalid GitHub source spec (expected owner/repo): {spec!r}"

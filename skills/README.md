@@ -76,12 +76,22 @@ Commands:
 # Add a local skill directory
 skillet add ./team-skills/react-frontend
 
-# Add a GitHub skill source
+# Add a single GitHub skill  (owner/repo/subpath)
+skillet add anthropics/skills/skill-creator
+
+# Add all skills from a GitHub repo  (owner/repo)
 skillet add some-org/shared-frontend-patterns
+
+# Pin to a specific branch or tag
+skillet add anthropics/skills/skill-creator@main
 
 # Re-sync after changing sources
 skillet sync
 ```
+
+> **Note:** `skillet.lock` records origins with a `github:` prefix
+> (e.g. `github:anthropics/skills/skill-creator`). Both forms are
+> accepted by `skillet add`, so you can copy-paste a lock origin directly.
 
 ## Bundled Skills
 
