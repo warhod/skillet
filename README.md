@@ -1,5 +1,7 @@
 # Agent Skillet
 
+[![CI](https://github.com/508-dev/agent-skillet/actions/workflows/ci.yml/badge.svg)](https://github.com/508-dev/agent-skillet/actions/workflows/ci.yml)
+
 Prepare and serve agent skills!
 
 Agent Skillet helps teams install, version, and sync agent skills inside a repository.

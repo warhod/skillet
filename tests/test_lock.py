@@ -1,7 +1,10 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from skillet.installer.lock import (
+    existing_mirrors,
     is_managed,
     load_lock,
     lock_path,
@@ -55,6 +58,35 @@ def test_save_lock_normalizes_payload_shape(tmp_path: Path) -> None:
             }
         },
     }
+
+
+def test_existing_mirrors_returns_empty_when_entry_not_dict(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import skillet.installer.lock as lock_mod
+
+    monkeypatch.setattr(
+        lock_mod,
+        "load_lock",
+        lambda _project_dir: {"version": 1, "skills": {"x": "not-a-dict"}},
+    )
+    assert existing_mirrors(tmp_path, "x") == []
+
+
+def test_existing_mirrors_returns_empty_when_mirrors_not_list(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import skillet.installer.lock as lock_mod
+
+    monkeypatch.setattr(
+        lock_mod,
+        "load_lock",
+        lambda _project_dir: {
+            "version": 1,
+            "skills": {"x": {"origin": "o", "mirrors": "nope"}},
+        },
+    )
+    assert existing_mirrors(tmp_path, "x") == []
 
 
 def test_record_and_is_managed_round_trip(tmp_path: Path) -> None:

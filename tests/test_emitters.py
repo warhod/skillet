@@ -1,7 +1,18 @@
+import json
 import shutil
 from pathlib import Path
 
-from skillet.installer.emitters import emit_native_skills, write_config_files
+import pytest
+
+from skillet.installer.emitters import (
+    _iter_lock_skill_entries,
+    _remove_mirror_from_lock_entries,
+    _tracked_mirror_dirs,
+    emit_claude_code_skills,
+    emit_native_skills,
+    write_config_files,
+)
+from skillet.installer.lock import lock_path
 
 
 def _write_skill(skills_dir: Path, name: str, description: str) -> None:
@@ -250,3 +261,118 @@ def test_user_managed_native_skill_survives_prune_cycles(tmp_path: Path) -> None
 
     assert not (tmp_path / ".cursor" / "skills" / "managed").exists()
     assert (tmp_path / ".cursor" / "skills" / "my-custom" / "SKILL.md").is_file()
+
+
+def test_iter_lock_skill_entries_skips_non_dict_skills_container() -> None:
+    assert _iter_lock_skill_entries({"skills": "bad"}) == []
+
+
+def test_remove_mirror_skips_non_list_mirrors() -> None:
+    entries = [{"mirrors": "not-a-list"}]
+    assert _remove_mirror_from_lock_entries(entries, "any") is False
+
+
+def test_tracked_mirror_dirs_skips_bad_mirror_entries(tmp_path: Path) -> None:
+    dest = tmp_path / ".cursor" / "skills"
+    entries = [
+        {"mirrors": "not-list"},
+        {"mirrors": ["", "  ", 99, ".cursor/skills/a/SKILL.md"]},
+    ]
+    tracked = _tracked_mirror_dirs(entries, dest, tmp_path)
+    assert tracked == {".cursor/skills/a"}
+
+
+def test_write_config_files_skips_agent_without_native_mirror_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import skillet.installer.emitters as emitters_mod
+
+    skills_dir = tmp_path / ".skillet" / "skills"
+    _write_skill(skills_dir, "solo", "s")
+
+    mapping = dict(emitters_mod.AGENT_NATIVE_SKILL_REL_PATH)
+    mapping["claude"] = None
+    monkeypatch.setattr(emitters_mod, "AGENT_NATIVE_SKILL_REL_PATH", mapping)
+
+    write_config_files(
+        skills_dir,
+        tmp_path,
+        {"claude": True, "cursor": False, "opencode": False},
+    )
+
+    assert not (tmp_path / ".claude" / "skills").exists()
+
+
+def test_write_config_files_dedupes_shared_native_root(tmp_path: Path) -> None:
+    """Gemini and OpenCode share ``.agents/skills``; second agent must not double-emit."""
+    skills_dir = tmp_path / ".skillet" / "skills"
+    _write_skill(skills_dir, "d", "d")
+
+    written = write_config_files(
+        skills_dir,
+        tmp_path,
+        {"claude": False, "cursor": False, "opencode": True, "gemini": True},
+    )
+
+    assert written == {".agents/skills/": str(tmp_path / ".agents" / "skills")}
+    assert (tmp_path / ".agents" / "skills" / "d" / "SKILL.md").is_file()
+
+
+def test_prune_disabled_skips_non_directory_entries_under_tree(
+    tmp_path: Path,
+) -> None:
+    skills_dir = tmp_path / ".skillet" / "skills"
+    _write_skill(skills_dir, "z", "z")
+
+    write_config_files(
+        skills_dir,
+        tmp_path,
+        {"claude": False, "cursor": True, "opencode": False},
+    )
+    assert (tmp_path / ".cursor" / "skills" / "z" / "SKILL.md").is_file()
+
+    junk = tmp_path / ".cursor" / "skills" / "notes.txt"
+    junk.write_text("keep", encoding="utf-8")
+
+    write_config_files(
+        skills_dir,
+        tmp_path,
+        {"claude": False, "cursor": False, "opencode": False},
+    )
+
+    assert not (tmp_path / ".cursor" / "skills" / "z").exists()
+    assert junk.is_file()
+
+
+def test_emit_native_skills_resets_non_list_mirrors_in_lock(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import skillet.installer.emitters as emitters_mod
+
+    skills_dir = tmp_path / ".skillet" / "skills"
+    _write_skill(skills_dir, "fix", "f")
+    dest = tmp_path / ".cursor" / "skills"
+
+    def _load(_project: Path) -> dict:
+        return {
+            "version": 1,
+            "skills": {"fix": {"origin": "o", "mirrors": "broken"}},
+        }
+
+    monkeypatch.setattr(emitters_mod, "load_lock", _load)
+    emit_native_skills(skills_dir, dest, tmp_path)
+    saved = json.loads(lock_path(tmp_path).read_text(encoding="utf-8"))
+    mirrors = saved["skills"]["fix"]["mirrors"]
+    assert isinstance(mirrors, list)
+    assert any(m.endswith("fix/SKILL.md") for m in mirrors)
+
+
+def test_emit_claude_code_skills_writes_under_claude_skills(tmp_path: Path) -> None:
+    skills_dir = tmp_path / ".skillet" / "skills"
+    _write_skill(skills_dir, "c", "claude skill")
+
+    emit_claude_code_skills(skills_dir, tmp_path)
+
+    out = tmp_path / ".claude" / "skills" / "c" / "SKILL.md"
+    assert out.is_file()
+    assert "claude skill" in out.read_text(encoding="utf-8")
